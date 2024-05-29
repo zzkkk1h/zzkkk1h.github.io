@@ -2,7 +2,7 @@
 title: ciscn2024初赛-Pwn-wp
 date: 2024-05-20 19:45:19
 category: wp
-tags: [栈溢出,golang,house_of_orange,fastbin_attack]
+tags:
 ---
 
 > pwn和web题目赛后环境 https://ctf.show/challenges

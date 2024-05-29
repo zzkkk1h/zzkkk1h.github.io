@@ -2,7 +2,7 @@
 title: DragonKnightCTF-Pwn-wp
 date: 2024-05-27 16:55:33
 category: wp
-tags: [栈溢出,canary,栈迁移,one_gadget]
+tags:
 ---
 
 # Pwn
