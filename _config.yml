@@ -101,10 +101,10 @@ theme: butterfly
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment
 deploy:
-  type: 'git'
-  repo: 'git@github.com:zzkkk1h/zzkkk1h.github.io.git'
-  branch: main
-  Site updated: {{ now('YYYY-MM-DD HH:mm:ss') }}
+  type: #'git'
+  repo: #'git@github.com:zzkkk1h/zzkkk1h.github.io.git'
+  branch: #main
+  Site updated: #{{ now('YYYY-MM-DD HH:mm:ss') }}
 
 search:
   path: search.xml
