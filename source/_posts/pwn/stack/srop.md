@@ -2,7 +2,7 @@
 title: srop
 date: 2024-05-13 20:45:07
 category: stack
-tags: [srop,栈溢出,系统调用]
+tags: [srop,stack-overflow,syscall]
 ---
 > 参考资料：https://ctf-wiki.org/pwn/linux/user-mode/stackoverflow/x86/advanced-rop/srop/#_1
 

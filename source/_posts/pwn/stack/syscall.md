@@ -1,8 +1,8 @@
 ---
-title: 系统调用
+title: syscall
 date: 2024-05-12 20:03:05
 category: stack
-tags: 系统调用 
+tags: syscall 
 ---
 # 系统调用
 > 现代的操作系统通常都具有多任务处理的功能，通常靠进程来实现。
