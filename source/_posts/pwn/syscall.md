@@ -1,7 +1,7 @@
 ---
 title: syscall
 date: 2024-05-12 20:03:05
-category: stack
+category: pwn
 tags: syscall 
 ---
 # 系统调用

@@ -1,7 +1,7 @@
 ---
 title: srop
 date: 2024-05-13 20:45:07
-category: stack
+category: pwn
 tags: [srop,stack-overflow,syscall]
 ---
 > 参考资料：https://ctf-wiki.org/pwn/linux/user-mode/stackoverflow/x86/advanced-rop/srop/#_1
