@@ -57,6 +57,13 @@ if (__glibc_unlikely (prev_inuse (next)))
   malloc_printerr ("malloc(): invalid next->prev_inuse (unsorted)");
 ```
 4. 使用top chunk时会先检查top chunk是否过大，house of force方法失效
+```c
+victim = av->top;
+size = chunksize (victim);
+
+if (__glibc_unlikely (size > av->system_mem))
+  malloc_printerr ("malloc(): corrupted top size");
+```
 
 ## glibc-2.30
 1. tcache的tcache_perthread_struct的count由char变成uint16_t
