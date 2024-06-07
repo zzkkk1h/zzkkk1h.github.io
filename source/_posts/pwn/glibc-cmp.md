@@ -35,9 +35,10 @@ git仓库可以使用 `git checkout glibc-2.xx` 切换到对应版本
 3. unlink加了一个当前size和下一个chunk的prev_size是否相等的检测，之前只有fd与bk双向链表完整性检测(largebin还有fd_nextsize与bk_nextsize双向链表的完整性检测)
 
 ## glibc-2.29
-1. unlink从宏变成一个名为unlink_chunk的函数了，除此之外没有任何变化
-2. 这个版本在tcache_entry结构体中加了一个tcache key，用于检测doubel free
-3. _int_malloc()函数在处理unsortedbin时加了一堆检测
+1. unlink从宏变成一个名为unlink_chunk的函数了
+2. 后向合并(和低地址chunk合并)的unlink前加了prev_size与前一个chunk的size是否相同的检测，不过感觉和unlink中第一个检测重复了
+3. 这个版本在tcache_entry结构体中加了一个tcache key，用于检测doubel free
+4. _int_malloc()函数在处理unsortedbin时加了一堆检测
 ```c
 size = chunksize (victim);
 mchunkptr next = chunk_at_offset (victim, size);
@@ -56,7 +57,7 @@ if (__glibc_unlikely (bck->fd != victim)
 if (__glibc_unlikely (prev_inuse (next)))
   malloc_printerr ("malloc(): invalid next->prev_inuse (unsorted)");
 ```
-4. 使用top chunk时会先检查top chunk是否过大，house of force方法失效
+5. 使用top chunk时会先检查top chunk是否过大，house of force方法失效
 ```c
 victim = av->top;
 size = chunksize (victim);
