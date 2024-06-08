@@ -34,6 +34,9 @@ git仓库可以使用 `git checkout glibc-2.xx` 切换到对应版本
 2. 检测是否能够申请tcache堆块是根据next指针的值不为NULL来判断的，而不是通过对应tcache的count
 3. unlink加了一个当前size和下一个chunk的prev_size是否相等的检测，之前只有fd与bk双向链表完整性检测(largebin还有fd_nextsize与bk_nextsize双向链表的完整性检测)
 
+## glibc-2.27
+malloc_state加了一个成员 int have_fastchunks;
+
 ## glibc-2.29
 1. unlink从宏变成一个名为unlink_chunk的函数了
 2. 后向合并(和低地址chunk合并)的unlink前加了prev_size与前一个chunk的size是否相同的检测，不过感觉和unlink中第一个检测重复了
