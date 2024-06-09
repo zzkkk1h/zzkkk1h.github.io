@@ -76,7 +76,7 @@ edit函数内可以多写8个字节，可以改写下一个chunk的size
 
 ### 思路
 1. 通过edit溢出修改top_chunk的size，然后通过申请较大的chunk将原top chunk置入unsorted bin
-2. 通过show泄露unsorted bin的bk指针，这个指针会指向main_arena结构体内部的一个变量，通过main_arena与libc的偏移泄露libc基址
+2. 通过show泄露unsorted bin的bk指针，这个指针会指向main_arena结构体内部的一个成员，通过main_arena与libc的偏移泄露libc基址
 3. 通过伪造chunk进行fastbin attack将堆分配到malloc_hook位置，写上one_gadget
 4. 再次调用malloc即可获取shell
 
@@ -93,7 +93,7 @@ edit函数内可以多写8个字节，可以改写下一个chunk的size
 
 所以可以修改为0xf91
 
-#### 计算偏移
+#### 计算main_arena与libc基址的偏移
 关于如何计算main_arena与libc的偏移，main_arena是一个全局变量，这里有两种思路可以得知main_arena在libc中的偏移
 1. 利用malloc_trim函数，这个函数会访问main_arena，可以通过这个函数在ida中找到偏移
 ```c
@@ -133,11 +133,217 @@ main_arena与malloc_hook的地址差为0x10，而malloc_hook的值可以用pwnto
 main_arena_offset = ELF("libc-2.23.so").symbols["__malloc_hook"] + 0x10
 ```
 
-利用这两种方法之一，便可以算出main_arena在libc中的偏移了，调试获取bk和main_arena的偏移，即可计算libc_base
+利用这两种方法之一，便可以算出main_arena在libc中的偏移了，再获取bk和main_arena的偏移，即可计算libc_base
 
-```python
-libc_base = leak_bk - (main_arena_offset+1640) #1640是调试获取的偏移
+#### 计算bk与main_arena的偏移
+可以直接调试获取
 ```
+pwndbg> heap
+Allocated chunk | PREV_INUSE
+Addr: 0x6549ce9b1000
+Size: 0x71
+
+Allocated chunk | PREV_INUSE
+Addr: 0x6549ce9b1070
+Size: 0x21
+
+Free chunk (unsortedbin) | PREV_INUSE
+Addr: 0x6549ce9b1090
+Size: 0xf51
+fd: 0x7e344694bb78
+bk: 0x7e344694bb78
+
+Allocated chunk
+Addr: 0x6549ce9b1fe0
+Size: 0x10
+
+Allocated chunk | PREV_INUSE
+Addr: 0x6549ce9b1ff0
+Size: 0x11
+
+Allocated chunk
+Addr: 0x6549ce9b2000
+Size: 0x00
+
+pwndbg> x/10gx 0x6549ce9b1070
+0x6549ce9b1070: 0x6161616161616161      0x0000000000000021
+0x6549ce9b1080: 0x6262626262626262      0x00007e344694c188
+0x6549ce9b1090: 0x00006549ce9b1070      0x0000000000000f51
+0x6549ce9b10a0: 0x00007e344694bb78      0x00007e344694bb78
+0x6549ce9b10b0: 0x0000000000000000      0x0000000000000000
+pwndbg> x/10gx 0x00007e344694c188
+0x7e344694c188 <main_arena+1640>:       0x00007e344694c178      0x00007e344694c178
+0x7e344694c198 <main_arena+1656>:       0x00007e344694c188      0x00007e344694c188
+0x7e344694c1a8 <main_arena+1672>:       0x00007e344694c198      0x00007e344694c198
+0x7e344694c1b8 <main_arena+1688>:       0x00007e344694c1a8      0x00007e344694c1a8
+0x7e344694c1c8 <main_arena+1704>:       0x00007e344694c1b8      0x00007e344694c1b8
+pwndbg>
+```
+可知偏移为main_arena+1640
+
+但也可以通过计算获取，首先我们来看一下main_arena的结构体malloc_state
+题目的libc是2.23，没有have_fastchunks这个成员，2.27之后新加了该成员，计算时注意一下
+```c
+struct malloc_state
+{
+  /* Serialize access.  */
+  __libc_lock_define(, mutex);
+
+  /* Flags (formerly in max_fast).  */
+  int flags;
+
+  /* Set if the fastbin chunks contain recently inserted free blocks.  */
+  /* Note this is a bool but not all targets support atomics on booleans.  */
+  int have_fastchunks;//glibc-2.27新加的一个成员
+
+  /* Fastbins */
+  mfastbinptr fastbinsY[NFASTBINS];
+
+  /* Base of the topmost chunk -- not otherwise kept in a bin */
+  mchunkptr top;
+
+  /* The remainder from the most recent split of a small request */
+  mchunkptr last_remainder;
+
+  /* Normal bins packed as described above */
+  mchunkptr bins[NBINS * 2 - 2];
+
+  /* Bitmap of bins , help to speed up the process of determinating if a given bin is definitely empty */
+  unsigned int binmap[BINMAPSIZE];
+
+  /* Linked list */
+  struct malloc_state* next;
+
+  /* Linked list for free arenas.  Access to this field is serialized
+     by free_list_lock in arena.c.  */
+  struct malloc_state* next_free;
+
+  /* Number of threads attached to this arena.  0 if the arena is on
+     the free list.  Access to this field is serialized by
+     free_list_lock in arena.c.  */
+  INTERNAL_SIZE_T attached_threads;
+
+  /* Memory allocated from the system in this arena.  */
+  INTERNAL_SIZE_T system_mem;
+  INTERNAL_SIZE_T max_system_mem;
+};
+```
+
+下面分别列出32位与64位该结构体的偏移
+|结构体成员                           |i386           |amd64          |
+|------------------------------------|---------------|---------------|
+|__libc_lock_define(, mutex);        |4B             |4B             |
+|int flags;                          |4B             |4B             |
+|int have_fastchunks;                |4B             |4B             |
+|mfastbinptr fastbinsY[NFASTBINS];   |40B=4B*10      |80B=8B*10      |
+|mchunkptr top;                      |4B             |8B             |
+|mchunkptr last_remainder;           |4B             |8B             |
+|mchunkptr bins[NBINS * 2 - 2];      |1016B=4B*254   |2032B=8B*254   |
+|unsigned int binmap[BINMAPSIZE];    |16B=4B*4       |16B=4B*4       |
+|struct malloc_state* next;          |4B             |8B             |
+|struct malloc_state* next_free;     |4B             |8B             |
+|INTERNAL_SIZE_T attached_threads;   |4B             |8B             |
+|INTERNAL_SIZE_T system_mem;         |4B             |8B             |
+|INTERNAL_SIZE_T max_system_mem;     |4B             |8B             |
+
+bins数组每两位为一组，存放一个chunk的fd和bk
+`chunk=bin_at(1)`将`&bins[(i-1)*2]-0x10`返回，之后调用`chunk->fd`即返回`bins[0]`的值，调用`chunk->bk`即返回`bins[1]`的值
+
+|所属bin类型    |bin_at下标|bins下标|数量|
+|--------------|----------|--------|---|
+|unsorted bin  |1         |0~1     |1  |
+|small bin     |2~63      |2~124   |62 |
+|large bin     |64~126    |125~253 |63 |
+
+small bin 大小与下标
+|bin_at |SIZE_SZ=4(32 位)|SIZE_SZ=8(64 位)|
+|-------|----------------|----------------|
+|2	    |16B             |32B             |
+|3	    |24B             |48B             |
+|4	    |32B             |64B             |
+|5	    |40B             |80B             |
+|x	    |`2*4*x`B        |`2*8*x`B        |
+|63	    |504B            |1008B           |
+
+large bin 大小与下标
+|bin_at       |组      |数量   |
+|-------------|--------|-------|
+|64~95        |1       |32     |
+|96~111       |2       |16     |
+|112~119      |3       |8      |
+|120~123      |4       |4      |
+|124~125      |5       |2      |
+|126          |6       |1      |
+```c
+#define largebin_index_32(sz)                                                  \
+    (((((unsigned long) (sz)) >> 6) <= 38)                                     \
+         ? 56 + (((unsigned long) (sz)) >> 6)                                  \
+         : ((((unsigned long) (sz)) >> 9) <= 20)                               \
+               ? 91 + (((unsigned long) (sz)) >> 9)                            \
+               : ((((unsigned long) (sz)) >> 12) <= 10)                        \
+                     ? 110 + (((unsigned long) (sz)) >> 12)                    \
+                     : ((((unsigned long) (sz)) >> 15) <= 4)                   \
+                           ? 119 + (((unsigned long) (sz)) >> 15)              \
+                           : ((((unsigned long) (sz)) >> 18) <= 2)             \
+                                 ? 124 + (((unsigned long) (sz)) >> 18)        \
+                                 : 126)
+
+#define largebin_index_32_big(sz)                                              \
+    (((((unsigned long) (sz)) >> 6) <= 45)                                     \
+         ? 49 + (((unsigned long) (sz)) >> 6)                                  \
+         : ((((unsigned long) (sz)) >> 9) <= 20)                               \
+               ? 91 + (((unsigned long) (sz)) >> 9)                            \
+               : ((((unsigned long) (sz)) >> 12) <= 10)                        \
+                     ? 110 + (((unsigned long) (sz)) >> 12)                    \
+                     : ((((unsigned long) (sz)) >> 15) <= 4)                   \
+                           ? 119 + (((unsigned long) (sz)) >> 15)              \
+                           : ((((unsigned long) (sz)) >> 18) <= 2)             \
+                                 ? 124 + (((unsigned long) (sz)) >> 18)        \
+                                 : 126)
+
+// XXX It remains to be seen whether it is good to keep the widths of
+// XXX the buckets the same or whether it should be scaled by a factor
+// XXX of two as well.
+#define largebin_index_64(sz)                                                  \
+    (((((unsigned long) (sz)) >> 6) <= 48)                                     \
+         ? 48 + (((unsigned long) (sz)) >> 6)                                  \
+         : ((((unsigned long) (sz)) >> 9) <= 20)                               \
+               ? 91 + (((unsigned long) (sz)) >> 9)                            \
+               : ((((unsigned long) (sz)) >> 12) <= 10)                        \
+                     ? 110 + (((unsigned long) (sz)) >> 12)                    \
+                     : ((((unsigned long) (sz)) >> 15) <= 4)                   \
+                           ? 119 + (((unsigned long) (sz)) >> 15)              \
+                           : ((((unsigned long) (sz)) >> 18) <= 2)             \
+                                 ? 124 + (((unsigned long) (sz)) >> 18)        \
+                                 : 126)
+
+#define largebin_index(sz)                                                     \
+    (SIZE_SZ == 8 ? largebin_index_64(sz) : MALLOC_ALIGNMENT == 16             \
+                                                ? largebin_index_32_big(sz)    \
+                                                : largebin_index_32(sz))
+```
+
+我们将top chunk的size修改为0xf90，利用申请大chunk将top chunk释放到unsorted bin，再申请一个0x10的chunk时
+会先将unsorted bin中的chunk取出，放到相应的small bin或者large bin
+本题会将unsorted bin中大小为0xf90的堆块放到large bin，利用largebin_index_64计算得出index为98
+而bin_at为98的值对应的bins下标为 `(98-1)*2=194`
+所以最终偏移为
+```python
+word_bytes = context.word_size # i386->word_size=32  amd64->word_size=64
+bin_at = 98
+bins = (bin_at-1)*2
+offset = 4  # lock
+offset += 4  # flags
+# offset += 4  # have_fastchunks
+offset += word_bytes * 10  # fastbinY
+offset += word_bytes * 2  # top,last_remainder
+offset += word_bytes * bins # offset bins
+offset -= word_bytes * 2  # bin overlap
+print(offset) #1640
+```
+
+最后减去`word_bytes * 2`是因为bins的bk指针指向的是`&bins[(i-1)*2]-0x10`，所以要减去`word_bytes * 2`即0x10
+最终计算结果与调试结果一致
 
 #### 分配到malloc_hook
 因为程序在free堆块之后没有清空，可以继续写值，那我们就可以修改这个堆块的fd指针指向一个addr
@@ -235,8 +441,8 @@ libc_base = leak_bk - (main_arena_offset+1640) #1640是调试获取的偏移
 ```
 
 我们调试一下看看__malloc_hook上方有没有满足要求的值 
-```bash
-pwndbg> x/10xg 0x7c63ee9ebaed 
+```
+pwndbg> x/10gx (uint64_t)&__malloc_hook-0x23
 0x7c63ee9ebaed <_IO_wide_data_0+301>:   0x63ee9ea260000000      0x000000000000007c
 0x7c63ee9ebafd: 0x63ee6acea0000000      0x63ee6aca7000007c
 0x7c63ee9ebb0d <__realloc_hook+5>:      0x000000000000007c      0x0000000000000000
@@ -255,15 +461,15 @@ fast_index(sz)  -> ((((unsigned int) (sz)) >> (SIZE_SZ == 8 ? 4 : 3)) - 2)
                 -> 5
 ```
 
-|fastbinY|32位chunk|32位用户|64位chunk|64位用户|
-|-----------|----|----|----|----|
-|fastbinY[0]|0x18|0x08|0x20|0x10|
-|fastbinY[1]|0x20|0x10|0x30|0x20|
-|fastbinY[2]|0x28|0x18|0x40|0x30|
-|fastbinY[3]|0x30|0x20|0x50|0x40|
-|fastbinY[4]|0x38|0x28|0x60|0x50|
-|fastbinY[5]|0x40|0x30|0x70|0x60|
-|fastbinY[6]|0x48|0x38|0x80|0x70|
+|fastbinY   |32位chunk_size|64位chunk_size|
+|-----------|--------------|--------------|
+|fastbinY[0]|0x18          |0x20          |
+|fastbinY[1]|0x20          |0x30          |
+|fastbinY[2]|0x28          |0x40          |
+|fastbinY[3]|0x30          |0x50          |
+|fastbinY[4]|0x38          |0x60          |
+|fastbinY[5]|0x40          |0x70          |
+|fastbinY[6]|0x48          |0x80          |
 
 即fastbin的idx为5，对应chunk大小为0x70
 当我们申请0x60到0x68字节大小的空间时，会先调用一个checked_request2size的宏转为0x70的chunk size
