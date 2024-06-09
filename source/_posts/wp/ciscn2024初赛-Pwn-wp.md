@@ -328,7 +328,7 @@ large bin 大小与下标
 会先将unsorted bin中的chunk取出，放到相应的small bin或者large bin
 本题会将unsorted bin中大小为0xf90的堆块放到large bin，利用largebin_index_64计算得出index为98
 而bin_at为98的值对应的bins下标为 `(98-1)*2=194`
-所以最终偏移为
+所以计算出bk在main_arena的偏移为
 ```python
 word_bytes = context.word_size # i386->word_size=32  amd64->word_size=64
 bin_at = 98
