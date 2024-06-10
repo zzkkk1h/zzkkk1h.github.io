@@ -598,6 +598,14 @@ cd protobuf-c
 ./configure
 make -j 4
 sudo make install
+
+# 安装python的protobuf支持
+pip install protobuf
+
+# 如果之后在使用中出现 
+# ImportError: cannot import name 'builder' from 'google.protobuf.internal'
+# 先执行一下，一般都能解决问题
+pip install --upgrade protobuf
 ```
 
 之后我们会使用 protoc 生成 python 语言的结构化数据，便于利用 pwntools 发送数据
@@ -802,6 +810,10 @@ typedef enum {
 } ProtobufCType;
 ```
 更多相关信息请查看 [protobuf-c](https://protobuf-c.github.io/protobuf-c)
+
+现在我们得知了消息的结构体 ProtobufCMessageDescriptor
+也得知消息中所有成员的结构体 ProtobufCFieldDescriptor
+还有每个成员的类型 ProtobufCType
 利用这两个结构体和这个类型枚举便可以开始逆向程序了
 
 ### 程序逆向
@@ -865,7 +877,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
 #### python使用protobuf
 ```python
-import heybro_pb2
+import heybro_pb2 # 不要加.py
 data = heybro_pb2.heybro() # 方法名称跟随.proto中结构体名称变化
 data.whattodo = todo
 data.whatcon = content
@@ -881,6 +893,310 @@ data.SerializeToString() # 转换成bytes
 
 再看看menu函数
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-menu.png)
+
+我们可以看到，程序读取输入，然后调用sub_1C87()解包数据，这个函数会直接调用另一个函数
+![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-sub_1C87.png)
+
+我已经给这个函数改名了，这个函数是protobuf_c_message_unpack函数
+
+protobuf_c_message_unpack函数的源码，可以粗略看看，主要是看看这个函数对堆有没有影响
+```c
+ProtobufCMessage *
+protobuf_c_message_unpack(const ProtobufCMessageDescriptor *desc,
+			  ProtobufCAllocator *allocator,
+			  size_t len, const uint8_t *data)
+{
+	ProtobufCMessage *rv;
+	size_t rem = len;
+	const uint8_t *at = data;
+	const ProtobufCFieldDescriptor *last_field = desc->fields + 0;
+	ScannedMember first_member_slab[1UL <<
+					FIRST_SCANNED_MEMBER_SLAB_SIZE_LOG2];
+
+	/*
+	 * scanned_member_slabs[i] is an array of arrays of ScannedMember.
+	 * The first slab (scanned_member_slabs[0] is just a pointer to
+	 * first_member_slab), above. All subsequent slabs will be allocated
+	 * using the allocator.
+	 */
+	ScannedMember *scanned_member_slabs[MAX_SCANNED_MEMBER_SLAB + 1];
+	unsigned which_slab = 0; /* the slab we are currently populating */
+	unsigned in_slab_index = 0; /* number of members in the slab */
+	size_t n_unknown = 0;
+	unsigned f;
+	unsigned j;
+	unsigned i_slab;
+	unsigned last_field_index = 0;
+	unsigned required_fields_bitmap_len;
+	unsigned char required_fields_bitmap_stack[16];
+	unsigned char *required_fields_bitmap = required_fields_bitmap_stack;
+	protobuf_c_boolean required_fields_bitmap_alloced = FALSE;
+
+	ASSERT_IS_MESSAGE_DESCRIPTOR(desc);
+
+	if (allocator == NULL)
+		allocator = &protobuf_c__allocator;
+
+	rv = do_alloc(allocator, desc->sizeof_message);
+	if (!rv)
+		return (NULL);
+	scanned_member_slabs[0] = first_member_slab;
+
+	required_fields_bitmap_len = (desc->n_fields + 7) / 8;
+	if (required_fields_bitmap_len > sizeof(required_fields_bitmap_stack)) {
+		required_fields_bitmap = do_alloc(allocator, required_fields_bitmap_len);
+		if (!required_fields_bitmap) {
+			do_free(allocator, rv);
+			return (NULL);
+		}
+		required_fields_bitmap_alloced = TRUE;
+	}
+	memset(required_fields_bitmap, 0, required_fields_bitmap_len);
+
+	/*
+	 * Generated code always defines "message_init". However, we provide a
+	 * fallback for (1) users of old protobuf-c generated-code that do not
+	 * provide the function, and (2) descriptors constructed from some other
+	 * source (most likely, direct construction from the .proto file).
+	 */
+	if (desc->message_init != NULL)
+		protobuf_c_message_init(desc, rv);
+	else
+		message_init_generic(desc, rv);
+
+	while (rem > 0) {
+		uint32_t tag;
+		uint8_t wire_type;
+		size_t used = parse_tag_and_wiretype(rem, at, &tag, &wire_type);
+		const ProtobufCFieldDescriptor *field;
+		ScannedMember tmp;
+
+		if (used == 0) {
+			PROTOBUF_C_UNPACK_ERROR("error parsing tag/wiretype at offset %u",
+						(unsigned) (at - data));
+			goto error_cleanup_during_scan;
+		}
+		/*
+		 * \todo Consider optimizing for field[1].id == tag, if field[1]
+		 * exists!
+		 */
+		if (last_field == NULL || last_field->id != tag) {
+			/* lookup field */
+			int field_index =
+			    int_range_lookup(desc->n_field_ranges,
+					     desc->field_ranges,
+					     tag);
+			if (field_index < 0) {
+				field = NULL;
+				n_unknown++;
+			} else {
+				field = desc->fields + field_index;
+				last_field = field;
+				last_field_index = field_index;
+			}
+		} else {
+			field = last_field;
+		}
+
+		if (field != NULL && field->label == PROTOBUF_C_LABEL_REQUIRED)
+			REQUIRED_FIELD_BITMAP_SET(last_field_index);
+
+		at += used;
+		rem -= used;
+		tmp.tag = tag;
+		tmp.wire_type = wire_type;
+		tmp.field = field;
+		tmp.data = at;
+		tmp.length_prefix_len = 0;
+
+		switch (wire_type) {
+		case PROTOBUF_C_WIRE_TYPE_VARINT: {
+			unsigned max_len = rem < 10 ? rem : 10;
+			unsigned i;
+
+			for (i = 0; i < max_len; i++)
+				if ((at[i] & 0x80) == 0)
+					break;
+			if (i == max_len) {
+				PROTOBUF_C_UNPACK_ERROR("unterminated varint at offset %u",
+							(unsigned) (at - data));
+				goto error_cleanup_during_scan;
+			}
+			tmp.len = i + 1;
+			break;
+		}
+		case PROTOBUF_C_WIRE_TYPE_64BIT:
+			if (rem < 8) {
+				PROTOBUF_C_UNPACK_ERROR("too short after 64bit wiretype at offset %u",
+							(unsigned) (at - data));
+				goto error_cleanup_during_scan;
+			}
+			tmp.len = 8;
+			break;
+		case PROTOBUF_C_WIRE_TYPE_LENGTH_PREFIXED: {
+			size_t pref_len;
+
+			tmp.len = scan_length_prefixed_data(rem, at, &pref_len);
+			if (tmp.len == 0) {
+				/* NOTE: scan_length_prefixed_data calls UNPACK_ERROR */
+				goto error_cleanup_during_scan;
+			}
+			tmp.length_prefix_len = pref_len;
+			break;
+		}
+		case PROTOBUF_C_WIRE_TYPE_32BIT:
+			if (rem < 4) {
+				PROTOBUF_C_UNPACK_ERROR("too short after 32bit wiretype at offset %u",
+					      (unsigned) (at - data));
+				goto error_cleanup_during_scan;
+			}
+			tmp.len = 4;
+			break;
+		default:
+			PROTOBUF_C_UNPACK_ERROR("unsupported tag %u at offset %u",
+						wire_type, (unsigned) (at - data));
+			goto error_cleanup_during_scan;
+		}
+
+		if (in_slab_index == (1UL <<
+			(which_slab + FIRST_SCANNED_MEMBER_SLAB_SIZE_LOG2)))
+		{
+			size_t size;
+
+			in_slab_index = 0;
+			if (which_slab == MAX_SCANNED_MEMBER_SLAB) {
+				PROTOBUF_C_UNPACK_ERROR("too many fields");
+				goto error_cleanup_during_scan;
+			}
+			which_slab++;
+			size = sizeof(ScannedMember)
+				<< (which_slab + FIRST_SCANNED_MEMBER_SLAB_SIZE_LOG2);
+			scanned_member_slabs[which_slab] = do_alloc(allocator, size);
+			if (scanned_member_slabs[which_slab] == NULL)
+				goto error_cleanup_during_scan;
+		}
+		scanned_member_slabs[which_slab][in_slab_index++] = tmp;
+
+		if (field != NULL && field->label == PROTOBUF_C_LABEL_REPEATED) {
+			size_t *n = STRUCT_MEMBER_PTR(size_t, rv,
+						      field->quantifier_offset);
+			if (wire_type == PROTOBUF_C_WIRE_TYPE_LENGTH_PREFIXED &&
+			    (0 != (field->flags & PROTOBUF_C_FIELD_FLAG_PACKED) ||
+			     is_packable_type(field->type)))
+			{
+				size_t count;
+				if (!count_packed_elements(field->type,
+							   tmp.len -
+							   tmp.length_prefix_len,
+							   tmp.data +
+							   tmp.length_prefix_len,
+							   &count))
+				{
+					PROTOBUF_C_UNPACK_ERROR("counting packed elements");
+					goto error_cleanup_during_scan;
+				}
+				*n += count;
+			} else {
+				*n += 1;
+			}
+		}
+
+		at += tmp.len;
+		rem -= tmp.len;
+	}
+
+	/* allocate space for repeated fields, also check that all required fields have been set */
+	for (f = 0; f < desc->n_fields; f++) {
+		const ProtobufCFieldDescriptor *field = desc->fields + f;
+		if (field == NULL) {
+			continue;
+		}
+		if (field->label == PROTOBUF_C_LABEL_REPEATED) {
+			size_t siz =
+			    sizeof_elt_in_repeated_array(field->type);
+			size_t *n_ptr =
+			    STRUCT_MEMBER_PTR(size_t, rv,
+					      field->quantifier_offset);
+			if (*n_ptr != 0) {
+				unsigned n = *n_ptr;
+				void *a;
+				*n_ptr = 0;
+				assert(rv->descriptor != NULL);
+#define CLEAR_REMAINING_N_PTRS()                                              \
+              for(f++;f < desc->n_fields; f++)                                \
+                {                                                             \
+                  field = desc->fields + f;                                   \
+                  if (field->label == PROTOBUF_C_LABEL_REPEATED)              \
+                    STRUCT_MEMBER (size_t, rv, field->quantifier_offset) = 0; \
+                }
+				a = do_alloc(allocator, siz * n);
+				if (!a) {
+					CLEAR_REMAINING_N_PTRS();
+					goto error_cleanup;
+				}
+				STRUCT_MEMBER(void *, rv, field->offset) = a;
+			}
+		} else if (field->label == PROTOBUF_C_LABEL_REQUIRED) {
+			if (field->default_value == NULL &&
+			    !REQUIRED_FIELD_BITMAP_IS_SET(f))
+			{
+				CLEAR_REMAINING_N_PTRS();
+				PROTOBUF_C_UNPACK_ERROR("message '%s': missing required field '%s'",
+							desc->name, field->name);
+				goto error_cleanup;
+			}
+		}
+	}
+#undef CLEAR_REMAINING_N_PTRS
+
+	/* allocate space for unknown fields */
+	if (n_unknown) {
+		rv->unknown_fields = do_alloc(allocator,
+					      n_unknown * sizeof(ProtobufCMessageUnknownField));
+		if (rv->unknown_fields == NULL)
+			goto error_cleanup;
+	}
+
+	/* do real parsing */
+	for (i_slab = 0; i_slab <= which_slab; i_slab++) {
+		unsigned max = (i_slab == which_slab) ?
+			in_slab_index : (1UL << (i_slab + 4));
+		ScannedMember *slab = scanned_member_slabs[i_slab];
+
+		for (j = 0; j < max; j++) {
+			if (!parse_member(slab + j, rv, allocator)) {
+				PROTOBUF_C_UNPACK_ERROR("error parsing member %s of %s",
+							slab->field ? slab->field->name : "*unknown-field*",
+					desc->name);
+				goto error_cleanup;
+			}
+		}
+	}
+
+	/* cleanup */
+	for (j = 1; j <= which_slab; j++)
+		do_free(allocator, scanned_member_slabs[j]);
+	if (required_fields_bitmap_alloced)
+		do_free(allocator, required_fields_bitmap);
+	return rv;
+
+error_cleanup:
+	protobuf_c_message_free_unpacked(rv, allocator);
+	for (j = 1; j <= which_slab; j++)
+		do_free(allocator, scanned_member_slabs[j]);
+	if (required_fields_bitmap_alloced)
+		do_free(allocator, required_fields_bitmap);
+	return NULL;
+
+error_cleanup_during_scan:
+	do_free(allocator, rv);
+	for (j = 1; j <= which_slab; j++)
+		do_free(allocator, scanned_member_slabs[j]);
+	if (required_fields_bitmap_alloced)
+		do_free(allocator, required_fields_bitmap);
+	return NULL;
+}
+```
 
 #### 动态分析
 首先编写交互逻辑，主要是将create函数和show函数用python实现出来
@@ -943,23 +1259,32 @@ show(0)
 
 p.interactive()
 ```
-编写这样的程序，调试运行。将运行菜单函数前后的堆打印出来比较，主要有两处不同
+编写这样的程序，调试运行。
+第一张是解包函数运行后的堆块变化
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-heap-cmp-1.png)
+
+第二张是menu函数运行后的堆块变化
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-heap-cmp-2.png)
+
 查看不同堆块的数据
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-heap-cmp-hexdump.png)
+
 最终运行结果
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak.png)
 
-第一处不同是解包过程中申请的内存块，这里可以得知解包中会申请与content大小相同的堆块存放内容
-第二次不同是menu函数申请的0x30大小的堆块，用来存放content，不过把smallbin的bk指针一起copy了
-可以得知输入8字节数据后可以泄露出一个smallbin的bk指针，调试获取偏移即可计算libc基址
+从这里可以看出，解包过程中会申请两个chunk
+第一个chunk的大小由ProtobufCMessageDescriptor的sizeof_message成员决定，本题固定为0x48，申请后chunk大小为0x50，符合分析结果
+第二个chunk的大小由content的大小决定，我们只输入了8个字节，所以会申请最小的chunk，也就是0x20大小的chunk
+
+第二张图片显示的堆块变化是menu函数申请的0x30大小的堆块，用来存放content，并将unsortedbin的bk指针一起copy了
+可以得知输入8字节数据后可以泄露出一个unsortedbin的bk指针，调试获取偏移即可计算libc基址
+
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak-2.png)
 
 得到偏移 2206944(0x21ace0)
 
 ### 思路
-1. 通过遗留的small bin的bk指针调试获取偏移，计算libc基址
+1. 通过泄露的unsortedbin的bk指针调试获取偏移，计算libc基址
 2. 将堆块释放进入tcache，利用PROTECT_PTR机制获取堆上地址(缺少最后12bit)，调试获取与heap基址的偏移，计算heap基址
 3. 申请0x40的堆块，填满tcache
 4. 利用double free构造fastbin循环链表
@@ -968,11 +1293,12 @@ p.interactive()
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak-3.png)
 7. 利用PROTECT_PTR公式，填充相应的地址`p64((heap_base + 0xf0)^((heap_base + 0x004e40)>>12))`
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-alloc.png)
-8. 在heap_base + 0xf0处(即0xf0大小的tcache块的entries指针处)，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct，关于这个结构体的攻击，可以查看[tcache-perthread-corruption](https://ctf-wiki.org/pwn/linux/user-mode/heap/ptmalloc2/tcache-attack/#tcache-perthread-corruption)
+8. 在heap_base + 0xf0处(即0xf0大小的tcache块的entries指针处)，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct
 9. 之后便可以更改tcache_perthread_struct了，可以实现tcache的任意分配，分配到stdout更改write_ptr和write_end指针泄露environ，调试environ与栈的偏移计算出栈地址，然后在利用tcache_perthread_struct分配到栈上进行ret2libc
 
-关于tcache_perthread_struct的构造、_IO_2_1_stdout_的构造，最后栈偏移的计算还不熟悉，之后再练练
-整个周末都在看这题，总算是解决一部分了
+关于tcache_perthread_struct的构造、_IO_2_1_stdout_的构造，最后栈偏移的计算还不熟悉，之后再补上
+#### tcache_perthread_struct
+#### _IO_2_1_stdout_
 
 ### exp
 ```python
