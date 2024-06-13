@@ -1401,6 +1401,8 @@ payload2 = p64(0xFBAD1800)+p64(0)*3+p64(environ)+p64(environ+8)
 之后便会泄露environ的值
 
 ### environ
+environ是个由libc定义的全局变量，定义为`char **environ`，用于存放程序的环境变量
+而它存放的指针通常是栈上的，所以可以利用它来泄露栈上的值
 
 ### exp
 ```python
