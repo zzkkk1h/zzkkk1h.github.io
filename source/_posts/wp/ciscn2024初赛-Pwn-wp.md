@@ -75,7 +75,7 @@ house of orange + fastbin attack
 edit函数内可以多写8个字节，可以改写下一个chunk的size
 
 ### 思路
-1. 通过edit溢出修改top_chunk的size，然后通过申请较大的chunk将原top chunk置入unsorted bin
+1. 通过edit溢出修改top_chunk的size，然后通过申请较大的chunk调用sysmalloc函数中的_int_free将原top chunk置入unsorted bin(这是house of orange的攻击手法)
 2. 通过show泄露unsorted bin的bk指针，这个指针会指向main_arena结构体内部的一个成员，通过main_arena与libc的偏移泄露libc基址
 3. 通过伪造chunk进行fastbin attack将堆分配到malloc_hook位置，写上one_gadget
 4. 再次调用malloc即可获取shell
@@ -558,6 +558,8 @@ p.interactive()
 ### protobuf
 #### 简介
 > 官方文档：https://protobuf.dev/overview/
+> protobuf-c的官方文档：https://protobuf-c.github.io/protobuf-c
+> protobuf-c的源码仓库：https://github.com/protobuf-c/protobuf-c
 
 Protobuf是一种与语言无关、与平台无关的可扩展机制，用于序列化结构化数据。它类似于 JSON，但体积更小、速度更快，并且会生成本机语言绑定。您只需定义一次数据的结构，然后就可以使用专门生成的源代码轻松地将结构化数据写入各种数据流并使用各种语言读取这些结构化数据。
 
@@ -571,7 +573,7 @@ Protobuf是一种与语言无关、与平台无关的可扩展机制，用于序
 - Python
 - Ruby
 
-其他语言(如C语言)需要额外安装插件
+其他语言(如C语言)需要额外安装插件，本题是一个c语言程序，用到了插件protobuf-c
 
 #### 安装
 ```bash
@@ -579,6 +581,7 @@ Protobuf是一种与语言无关、与平台无关的可扩展机制，用于序
 sudo apt install git g++ autoconf automake libtool curl make unzip
 
 # 安装 protobuf
+cd ~ # 切换到一个合适的位置
 git clone https://github.com/protocolbuffers/protobuf.git
 cd protobuf
 git checkout v3.21.0 # 试过v27.0，protobuf-c装不上，所以用v3.21.0
@@ -592,6 +595,7 @@ which protoc        # find the location
 protoc --version    # check
 
 # 安装 protobuf-c
+cd ~ # 切换到一个合适的位置
 git clone https://github.com/protobuf-c/protobuf-c.git
 cd protobuf-c
 ./autogen.sh
@@ -611,7 +615,7 @@ pip install --upgrade protobuf
 之后我们会使用 protoc 生成 python 语言的结构化数据，便于利用 pwntools 发送数据
 
 #### 深入分析
-首先我们新建一个.proto文件，利用protoc生成一个c语言的代码，查看结构体，了解一下结构体的成员，方便逆向程序中的结构体
+首先我们新建一个.proto文件，利用protoc生成一个c语言的代码，查看生成的文件，进一步了解protonuf
 ```
 syntax="proto3"; //proto version 2 or 3
 
@@ -622,6 +626,7 @@ message test{
 }
 ```
 将上述内容保存为test.proto文件，使用`protoc test.proto --c_out=./`生成相应的c语言代码
+下面是生成出的文件的一部分代码，其中包含两个结构体
 
 ```c
 static const ProtobufCFieldDescriptor test__field_descriptors[3] =
@@ -690,7 +695,7 @@ const ProtobufCMessageDescriptor test__descriptor =
 };
 ```
 
-生成的文件中涉及到了两个结构体
+我们查看这两个结构体的源码
 - ProtobufCMessageDescriptor
 ```c
 /**
@@ -809,12 +814,13 @@ typedef enum {
 	PROTOBUF_C_TYPE_MESSAGE,    /**< nested message */
 } ProtobufCType;
 ```
-更多相关信息请查看 [protobuf-c](https://protobuf-c.github.io/protobuf-c)
+
+更多相关信息请查看 [protobuf-c源码仓库](https://github.com/protobuf-c/protobuf-c)、[protobuf-c官方文档](https://protobuf-c.github.io/protobuf-c)
 
 现在我们得知了消息的结构体 ProtobufCMessageDescriptor
 也得知消息中所有成员的结构体 ProtobufCFieldDescriptor
 还有每个成员的类型 ProtobufCType
-利用这两个结构体和这个类型枚举便可以开始逆向程序了
+利用这两个结构体和这个类型枚举便可以开始逆向程序，还原protobuf结构体了
 
 ### 程序逆向
 #### protobuf message逆向
