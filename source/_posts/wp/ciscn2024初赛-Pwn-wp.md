@@ -615,7 +615,7 @@ pip install --upgrade protobuf
 之后我们会使用 protoc 生成 python 语言的结构化数据，便于利用 pwntools 发送数据
 
 #### 深入分析
-首先我们新建一个.proto文件，利用protoc生成一个c语言的代码，查看生成的文件，进一步了解protonuf
+首先我们新建一个.proto文件，利用protoc生成一个c语言的代码，查看生成的文件，进一步了解protobuf
 ```
 syntax="proto3"; //proto version 2 or 3
 
@@ -626,7 +626,7 @@ message test{
 }
 ```
 将上述内容保存为test.proto文件，使用`protoc test.proto --c_out=./`生成相应的c语言代码
-下面是生成出的文件的一部分代码，其中包含两个结构体
+下面是生成出的文件的一部分代码，其中包含两个重要的结构体：ProtobufCFieldDescriptor和ProtobufCMessageDescriptor
 
 ```c
 static const ProtobufCFieldDescriptor test__field_descriptors[3] =
