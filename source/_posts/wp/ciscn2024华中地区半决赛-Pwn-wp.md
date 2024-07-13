@@ -198,5 +198,6 @@ p.interactive()
 ```
 
 ## starlink
-
+### 分析
+glibc-2.35，对应ubuntu-22.04
 
