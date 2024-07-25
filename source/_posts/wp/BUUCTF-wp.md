@@ -5,6 +5,9 @@ category: wp
 tags: 
 ---
 
+> BUUCTF的部分wp
+> 后面的有时间再做
+
 # test_your_nc
 ## 思路
 简单题，直接nc
