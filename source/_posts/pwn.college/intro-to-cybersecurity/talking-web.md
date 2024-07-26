@@ -5,6 +5,21 @@ category: pwn.college
 tags:
 ---
 
+# HTTP报文
+## 格式
+```
++-------------+----------------------------+------------------------------------------------+
+|format       |GET exapmle                 |POST example                                    |
++-------------+----------------------------+------------------------------------------------+
+|request line |GET /get?a=12&b=34 HTTP/1.1 |POST /post HTTP/1.1                             |
+|header       |Host: httpbin.org           |Host: httpbin.org                               |
+|header       |                            |Content-Type: application/x-www-form-urlencoded |
+|header       |                            |Content-Length: 9                               |
+|blank line   |                            |                                                |
+|request data |                            |a=12&b=34                                       |
++-------------+----------------------------+------------------------------------------------+
+```
+
 # Send an HTTP request
 ## curl
 ```sh
