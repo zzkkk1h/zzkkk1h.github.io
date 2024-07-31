@@ -1,88 +1,11 @@
 ---
 title: building-a-web-server
 date: 2024-07-25 19:46:04
-category:
+category: pwn.college
 tags:
 ---
 
-# socket
-> 关于socket的介绍，找到一篇比较好的blog： https://subingwen.cn/linux/socket
-
-- 服务端流程:
-1. socket() 创建socket
-2. bind() 绑定可以连接的IP以及端口号 (0.0.0.0 = 所有IP , 127.0.0.1 = 本地IP)
-3. listen() 开始监听
-4. accept() 接收请求
-5. send(),recv() 发送、接收数据
-
-- 客户端流程:
-1. socket() 创建socket
-2. connect() 发送连接请求
-3. send(),recv() 发送、接收数据
-4. close() 停止
-
-# C编写服务端
-使用C语言编写一个服务端，熟悉socket接口
-```c
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<unistd.h>
-#include<arpa/inet.h>
-
-int main()
-{
-    //socket():创建socket，该socket在服务端用于监听
-    int listen_fd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
-
-    //bind():绑定可以连接的IP和端口号
-    struct sockaddr_in server_addr;  
-    server_addr.sin_family = AF_INET;//协议族
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);//任意IP
-    server_addr.sin_port = htons(1234);//设置的端口
-    bind(listen_fd,&server_addr,sizeof(server_addr));
-
-    //listen():开始监听
-    listen(listen_fd,3);
-
-    //accept():等待接收请求，获取一个用于通信的socket
-    struct sockaddr_in client_addr; 
-    int client_len = sizeof(client_addr);
-    int connect_fd = accept(listen_fd,(struct sockaddr*)&client_addr,&client_len);
-
-    //recv(),send():数据收发
-    char ip[24] = {0};
-    printf("%s:%d connected\n",
-           inet_ntop(AF_INET, &client_addr.sin_addr.s_addr, ip, sizeof(ip)),ntohs(client_addr.sin_port));
-
-    while(1)
-    {
-        char buf[1024];
-        memset(buf, 0, sizeof(buf));
-        int len = recv(connect_fd, buf, sizeof(buf),0);
-        if(len > 0)
-        {
-            printf("客户端say: %s\n", buf);
-            send(connect_fd, buf, len,0);
-        }
-        else if(len  == 0)
-        {
-            printf("客户端断开了连接...\n");
-            break;
-        }
-        else
-        {
-            perror("read");
-            break;
-        }
-    }
-    close(listen_fd);
-    close(connect_fd);
-}
-```
-
-# 汇编编写服务端
-这是最终的代码
+# challenges
 ```X86ASM
 .intel_syntax noprefix
 

@@ -5,8 +5,8 @@ category: pwn.college
 tags:
 ---
 
-# HTTP报文
-## 格式
+# HTTP
+## HTTP request
 ```
 +-------------+----------------------------+------------------------------------------------+
 |format       |GET exapmle                 |POST example                                    |
@@ -20,21 +20,20 @@ tags:
 +-------------+----------------------------+------------------------------------------------+
 ```
 
-# Send an HTTP request
-## curl
+# Challenges
+## level1: Send an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET / HTTP/1.1
 ```
 
-输入完GET这一行后，输入两个换行即可发送
-
-## python
+### python
 ```python
 import requests
 
@@ -45,20 +44,20 @@ response = requests.get(url)
 print(response.content)
 ```
 
-# Set the host header in an HTTP request
-## curl
+## level2: Set the host header in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80 -H host:1c61bf39a9545b12f6fe638081f14f5c
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET / HTTP/1.1
 Host: c3b1fc17a0766e184c9af77b59799187
 ```
 
-## python
+### python
 ```python
 import requests
 
@@ -74,19 +73,19 @@ response = requests.get(url,headers=headers)
 print(response.content)
 ```
 
-# Set the path in an HTTP request
-## curl
+## level3: Set the path in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80/756549fa99c1d39df50fa0dbc7001b5b
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET /dff70448ab02fa153e53c321d12c3e25 HTTP/1.1
 ```
 
-## python
+### python
 ```python
 import requests
 
@@ -97,19 +96,19 @@ response = requests.get(url)
 print(response.content)
 ```
 
-# URL encode a path in an HTTP request
-## curl
+## level4: URL encode a path in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80/468d0524%20a0f46d01/13a2115f%2045f6bf42
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET /e834594f%20d12bbc07/45b1bdd9%2077ad1aa4 HTTP/1.1
 ```
 
-## python
+### python
 ```python
 import requests
 from urllib.parse import quote
@@ -123,19 +122,19 @@ response = requests.get(url)
 print(response.content)
 ```
 
-# Specify an argument in an HTTP request
-## curl
+## level5: Specify an argument in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80/?a=21c2593a91c22ea996d92149d6ee1310
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET /?a=0c59ad68454000d755026a99dadaa303 HTTP/1.1
 ```
 
-## python
+### python
 ```python
 import requests
 from urllib.parse import urlencode
@@ -153,19 +152,19 @@ response = requests.get(url,params=params)
 print(response.content)
 ```
 
-# Specify multiple arguments in an HTTP request
-## curl
+## level6: Specify multiple arguments in an HTTP request
+### curl
 ```sh
 curl -v -G --data-urlencode 'a=b40ff87c1dfc9445e66bd1dffd31ecf3' --data-urlencode 'b=e9e53eab 8cccb234&d985bc70#d49f0c63' 127.0.0.1:80
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET /?a=01df1fb634dda7a5f27c6c54d072b51d&b=de8950c2%20d91fa17a%2678fc768c%23e848a330 HTTP/1.1
 ```
 
-## python
+### python
 ```python
 import requests
 from urllib.parse import urlencode
@@ -185,13 +184,13 @@ response = requests.get(url,params=params)
 print(response.content)
 ```
 
-# Include form data in an HTTP request
-## curl
+## level7: Include form data in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80 -d "a=d59caa292e43dd969de6c0d6adebd053"
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 POST / HTTP/1.1
@@ -201,9 +200,8 @@ Content-Length: 34
 
 a=0a849ab7d1b57ed2f864880911873622
 ```
-如果在输入请求数据前nc就已经发送请求包了，请检查你有没有写对请求头的Host、Content-Type、Content-Length部分
 
-## python
+### python
 ```python
 import requests
 
@@ -216,13 +214,13 @@ response = requests.post(url,data)
 print(response.content)
 ```
 
-# Include form data with multiple fields in an HTTP request
-## curl
+## level8: Include form data with multiple fields in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80 -d "a=a4431e83e83cae7723c24b83f465475e" --data-urlencode "b=6100a2f0 e8809d07&587a0ea8#9b1109cd"
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 POST / HTTP/1.1
@@ -233,7 +231,7 @@ Content-Length: 78
 a=b0f2f1b6f49b2896213fb29b3b93a1ef&b=57792821%20bc13e5dc%261426d3c1%23972f7bb8
 ```
 
-## python
+### python
 ```python
 import requests
 
@@ -250,13 +248,13 @@ response = requests.post(url,data)
 print(response.content)
 ```
 
-# Include json data in an HTTP request
-## curl
+## level9: Include json data in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80 -H 'Content-Type:application/json' -d '{"a":"547135c945b35920ab6b764faba0467c"}'
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 POST / HTTP/1.1
@@ -267,7 +265,7 @@ Content-Length: 40
 {"a":"506924275dda4823072f030cb9e36878"}
 ```
 
-## python
+### python
 ```python
 import requests
 import json
@@ -287,13 +285,13 @@ response = requests.post(url,headers = headers,data=json.dumps(data))
 print(response.content)
 ```
 
-# Include complex json data in an HTTP request
-## curl
+## level10: Include complex json data in an HTTP request
+### curl
 ```sh
 curl 127.0.0.1:80 -H 'Content-Type:application/json' -d '{"a":"afb674d6a6635008d8f123b6db1c7fe1","b":{"c":"eaa06025","d":["f3e76d78","8897c850 15e64e19&86faa062#707120a5"]}}'
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 POST / HTTP/1.1
@@ -304,7 +302,7 @@ Content-Length: 116
 {"a":"e0e3ffb1ea8c041f948fd4a52b8b03ef","b":{"c":"07027b1c","d":["9caee2fb","40d89ef2 c4b79a11&7fa007c8#ccf64a5f"]}}
 ```
 
-## python
+### python
 ```python
 import requests
 import json
@@ -330,14 +328,12 @@ response = requests.post(url,headers = headers,data=json.dumps(data))
 print(response.content)
 ```
 
-# Follow an HTTP redirect from HTTP response
-## curl
+## level11: Follow an HTTP redirect from HTTP response
+### curl
 ```sh
 curl 127.0.0.1:80 -L
 ```
--L 表示跟踪重定向
-
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET / HTTP/1.1
@@ -346,27 +342,27 @@ nc 127.0.0.1 80
 GET /8987117b1c7a13a67e6ebdab1040b023 HTTP/1.1
 ```
 
-## python
+### python
 ```python
 import requests
 
 url = "127.0.0.1:80"
 
-# requests 默认进行重定向，如果不想重定向，加上allow_redirects=False参数
-response = requests.get(url)
+# 'allow_redirects=true' is default option, can be removed
+response = requests.get(url,allow_redirects=true)
 
 print(response.content)
 ```
 
-# Include a cookie from HTTP response
-## curl
+## level12: Include a cookie from HTTP response
+### curl
 ```sh
 curl 127.0.0.1:80 -v
 
 curl 127.0.0.1:80 --cookie "cookie=b0a72e415cbb83c7d2671097074329c0"
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET / HTTP/1.1
@@ -376,7 +372,7 @@ GET / HTTP/1.1
 Cookie: cookie=4203ce2d43f46581fe45652da89f9310
 ```
 
-## python
+### python
 ```python
 import requests
 
@@ -388,8 +384,8 @@ with requests.Session() as s:
 
 ```
 
-# Make multiple requests in response to stateful HTTP responses
-## curl
+## level13: Make multiple requests in response to stateful HTTP responses
+### curl
 ```sh
 curl 127.0.0.1:80 -v
 curl 127.0.0.1:80 --cookie "session=eyJzdGF0ZSI6MX0.ZqI1lw.eBOyNFmp0kEvgn4a1KTi6--ZyvE" -v
@@ -397,7 +393,7 @@ curl 127.0.0.1:80 --cookie "session=eyJzdGF0ZSI6Mn0.ZqI1vA.zPh9QlVY-OvqFsXUk6Ivc
 curl 127.0.0.1:80 --cookie "session=eyJzdGF0ZSI6M30.ZqI2AQ.71jPgAYQa35fYtKd79FZU9l2Omg" -v
 ```
 
-## nc
+### nc
 ```sh
 nc 127.0.0.1 80
 GET / HTTP/1.1
@@ -415,7 +411,7 @@ GET / HTTP/1.1
 Cookie: session=eyJzdGF0ZSI6M30.ZqI4NA.G_jGq5vQx6fd2HY3SgqzG95ZXo4
 ```
 
-## python
+### python
 ```python
 import requests
 
