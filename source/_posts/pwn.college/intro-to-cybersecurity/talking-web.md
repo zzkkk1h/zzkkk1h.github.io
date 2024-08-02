@@ -21,7 +21,8 @@ tags:
 ```
 
 # Challenges
-## level1: Send an HTTP request
+## level1
+> Send an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80
@@ -44,7 +45,8 @@ response = requests.get(url)
 print(response.content)
 ```
 
-## level2: Set the host header in an HTTP request
+## level2
+> Set the host header in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80 -H host:1c61bf39a9545b12f6fe638081f14f5c
@@ -73,7 +75,8 @@ response = requests.get(url,headers=headers)
 print(response.content)
 ```
 
-## level3: Set the path in an HTTP request
+## level3
+> Set the path in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80/756549fa99c1d39df50fa0dbc7001b5b
@@ -96,7 +99,8 @@ response = requests.get(url)
 print(response.content)
 ```
 
-## level4: URL encode a path in an HTTP request
+## level4
+> URL encode a path in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80/468d0524%20a0f46d01/13a2115f%2045f6bf42
@@ -122,7 +126,8 @@ response = requests.get(url)
 print(response.content)
 ```
 
-## level5: Specify an argument in an HTTP request
+## level5
+> Specify an argument in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80/?a=21c2593a91c22ea996d92149d6ee1310
@@ -152,7 +157,8 @@ response = requests.get(url,params=params)
 print(response.content)
 ```
 
-## level6: Specify multiple arguments in an HTTP request
+## level6
+> Specify multiple arguments in an HTTP request
 ### curl
 ```sh
 curl -v -G --data-urlencode 'a=b40ff87c1dfc9445e66bd1dffd31ecf3' --data-urlencode 'b=e9e53eab 8cccb234&d985bc70#d49f0c63' 127.0.0.1:80
@@ -184,7 +190,8 @@ response = requests.get(url,params=params)
 print(response.content)
 ```
 
-## level7: Include form data in an HTTP request
+## level7
+> Include form data in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80 -d "a=d59caa292e43dd969de6c0d6adebd053"
@@ -214,7 +221,8 @@ response = requests.post(url,data)
 print(response.content)
 ```
 
-## level8: Include form data with multiple fields in an HTTP request
+## level8
+> Include form data with multiple fields in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80 -d "a=a4431e83e83cae7723c24b83f465475e" --data-urlencode "b=6100a2f0 e8809d07&587a0ea8#9b1109cd"
@@ -248,7 +256,8 @@ response = requests.post(url,data)
 print(response.content)
 ```
 
-## level9: Include json data in an HTTP request
+## level9
+> Include json data in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80 -H 'Content-Type:application/json' -d '{"a":"547135c945b35920ab6b764faba0467c"}'
@@ -285,7 +294,8 @@ response = requests.post(url,headers = headers,data=json.dumps(data))
 print(response.content)
 ```
 
-## level10: Include complex json data in an HTTP request
+## level10
+> Include complex json data in an HTTP request
 ### curl
 ```sh
 curl 127.0.0.1:80 -H 'Content-Type:application/json' -d '{"a":"afb674d6a6635008d8f123b6db1c7fe1","b":{"c":"eaa06025","d":["f3e76d78","8897c850 15e64e19&86faa062#707120a5"]}}'
@@ -328,7 +338,8 @@ response = requests.post(url,headers = headers,data=json.dumps(data))
 print(response.content)
 ```
 
-## level11: Follow an HTTP redirect from HTTP response
+## level11
+> Follow an HTTP redirect from HTTP response
 ### curl
 ```sh
 curl 127.0.0.1:80 -L
@@ -354,7 +365,8 @@ response = requests.get(url,allow_redirects=true)
 print(response.content)
 ```
 
-## level12: Include a cookie from HTTP response
+## level12
+> Include a cookie from HTTP response
 ### curl
 ```sh
 curl 127.0.0.1:80 -v
@@ -384,7 +396,8 @@ with requests.Session() as s:
 
 ```
 
-## level13: Make multiple requests in response to stateful HTTP responses
+## level13
+> Make multiple requests in response to stateful HTTP responses
 ### curl
 ```sh
 curl 127.0.0.1:80 -v
