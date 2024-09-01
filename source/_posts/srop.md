@@ -10,12 +10,12 @@ tags: [srop,stack-overflow,syscall]
 
 signal 机制是类 unix 系统中进程之间相互传递信息的一种方法。一般，我们也称其为软中断信号，或者软中断。比如说，进程之间可以通过系统调用 kill 来发送软中断信号。一般来说，信号机制常见的步骤如下图所示：
 
-![](/img/pwn/ProcessOfSignalHandlering.png)
+![](srop/ProcessOfSignalHandlering.png)
 
 1. 内核向某个进程发送 signal 机制，该进程会被暂时挂起，进入内核态。
 2. 内核会为该进程保存相应的上下文，**主要是将所有寄存器压入栈中，以及压入 signal 信息，以及指向 sigreturn 的系统调用地址**。此时栈的结构如下图所示，我们称 ucontext 以及 siginfo 这一段为 Signal Frame。**需要注意的是，这一部分是在用户进程的地址空间的**。之后会跳转到注册过的 signal handler 中处理相应的 signal。因此，当 signal handler 执行完之后，就会执行 sigreturn 代码。
 
-![](/img/pwn/signal2-stack.png)
+![](srop/signal2-stack.png)
 
 对于 signal Frame 来说，会因为架构的不同而有所区别，这里给出分别给出 x86 以及 x64 的 sigcontext
 
@@ -118,7 +118,7 @@ struct sigcontext
 ## 获取 shell
 首先，我们假设攻击者可以控制用户进程的栈，那么它就可以伪造一个 Signal Frame，如下图所示，这里以 64 位为例子，给出 Signal Frame 更加详细的信息
 
-![](/img/pwn/srop-example-1.png)
+![](srop/srop-example-1.png)
 
 当系统执行完 sigreturn 系统调用之后，会执行一系列的 pop 指令以便于恢复相应寄存器的值，当执行到 rip 时，就会将程序执行流指向 syscall 地址，根据相应寄存器的值，此时，便会得到一个 shell。
 
@@ -130,7 +130,7 @@ struct sigcontext
 
 如下图所示 ，这样当每次 syscall 返回的时候，栈指针都会指向下一个 Signal Frame。因此就可以执行一系列的 sigreturn 函数调用。
 
-![](/img/pwn/srop-example-2.png)
+![](srop/srop-example-2.png)
 
 ## 后续
 需要注意的是，我们在构造 ROP 攻击的时候，需要满足下面的条件
@@ -145,11 +145,11 @@ struct sigcontext
 
 此外，关于 sigreturn 以及 syscall;ret 这两个 gadget 在上面并没有提及。提出该攻击的论文作者发现了这些 gadgets 出现的某些地址：
 
-![](/img/pwn/srop-gadget-1.png)
+![](srop/srop-gadget-1.png)
 
 并且，作者发现，有些系统上 SROP 的地址被随机化了，而有些则没有。比如说`Linux < 3.3 x86_64`（在 Debian 7.0， Ubuntu Long Term Support， CentOS 6 系统中默认内核），可以直接在 vsyscall 中的固定地址处找到 syscall&return 代码片段。如下
 
-![](/img/pwn/srop-gadget-2.png)
+![](srop/srop-gadget-2.png)
 
 但是目前它已经被`vsyscall-emulate`和`vdso`机制代替了。此外，目前大多数系统都会开启 ASLR 保护，所以相对来说这些 gadgets 都并不容易找到。
 

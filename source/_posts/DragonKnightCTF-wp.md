@@ -1,5 +1,5 @@
 ---
-title: DragonKnightCTF-Pwn-wp
+title: DragonKnightCTF-wp
 date: 2024-05-27 16:55:33
 category: wp
 tags:
@@ -84,8 +84,8 @@ buf数组的长度为0x100(256)，后边就是rbp和ret地址
 先在rbp处填上addr，ret处填上read函数的位置(包括给read函数传参的指令，即0x40119B)
 之后程序执行leave(相当于 mov rsp,rbp ; pop rbp)时，会将rbp的值填为addr
 
-![](/img/wp/DragonKnightCTF/stack_payload1_0.png)
-![](/img/wp/DragonKnightCTF/stack_payload1_1.png)
+![](DragonKnightCTF-wp/stack_payload1_0.png)
+![](DragonKnightCTF-wp/stack_payload1_1.png)
 
 #### 第二次溢出
 继续调用read函数时，会从rbp+buf(即addr-0x100)处开始写值
@@ -93,8 +93,8 @@ buf数组的长度为0x100(256)，后边就是rbp和ret地址
 函数执行结束后仍有一组 leave ; ret,利用这个leave ; ret ,可以将rsp放到addr+8处，rbp放到rbp指向的位置处
 这样就将栈迁移到了一个新的地方，并且我们知道此时栈上的一个地址addr
 
-![](/img/wp/DragonKnightCTF/stack_payload2_0.png)
-![](/img/wp/DragonKnightCTF/stack_payload2_1.png)
+![](DragonKnightCTF-wp/stack_payload2_0.png)
+![](DragonKnightCTF-wp/stack_payload2_1.png)
 
 #### ROP链
 迁移完之后，也有了伪造的栈上的地址，只要计算好偏移，使得 `rbp-rsp <= (0x100-0x10) `,便可使执行read函数时能够在压入的rbp和返回地址上写值，同时要注意不能时rbp-rsp过小，从而放不下rop链

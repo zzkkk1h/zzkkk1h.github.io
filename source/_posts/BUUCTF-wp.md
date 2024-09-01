@@ -8,15 +8,16 @@ tags:
 > BUUCTF的部分wp
 > 后面的有时间再做
 
-# test_your_nc
-## 思路
+# pwn
+## test_your_nc
+### 思路
 简单题，直接nc
 
-# rip
-## 思路
+## rip
+### 思路
 程序中给了后门，直接ret2text，注意一下栈平衡
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -35,11 +36,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# warmup_csaw_2016
-## 思路
+## warmup_csaw_2016
+### 思路
 ret2text简单题
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -57,12 +58,12 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# ciscn_2019_n_1
-## 思路
+## ciscn_2019_n_1
+### 思路
 可以覆盖栈中的浮点数，也可以直接覆盖返回地址
 
-## exp
-### 覆盖浮点数
+### exp
+#### 覆盖浮点数
 ```python
 from pwn import *
 import struct
@@ -76,7 +77,7 @@ p.sendline(payload)
 p.interactive()
 ```
 
-### 覆盖返回地址
+#### 覆盖返回地址
 ```python
 from pwn import *
 
@@ -90,11 +91,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# pwn1_sctf_2016
-## 思路
+## pwn1_sctf_2016
+### 思路
 程序中替换了输入中的'I'为'you'，并赋值回原位置，从而造成了栈溢出
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -105,11 +106,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# jarvisoj_level0
-## 思路
+## jarvisoj_level0
+### 思路
 ret2text
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -122,14 +123,14 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# [第五空间2019 决赛]PWN5
-## 思路
+## [第五空间2019 决赛]PWN5
+### 思路
 格式化字符串漏洞，有两种思路
 1. 利用格式化字符串漏洞读取全局变量的值
 2. 利用格式化字符串漏洞覆盖全局变量的值
 
-## exp
-### 读
+### exp
+#### 读
 ```python
 from pwn import *
 
@@ -152,7 +153,7 @@ p.interactive()
 
 ```
 
-### 写
+#### 写
 ```python
 from pwn import *
 
@@ -173,11 +174,11 @@ p.sendline(str(0x10101010))
 p.interactive()
 ```
 
-# jarvisoj_level2
-## 思路
+## jarvisoj_level2
+### 思路
 32位函数调用传参
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -193,11 +194,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# ciscn_2019_n_8
-## 思路
+## ciscn_2019_n_8
+### 思路
 覆盖`var[13]`成0x11即可
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -212,11 +213,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# bjdctf_2020_babystack
-## 思路
+## bjdctf_2020_babystack
+### 思路
 ret2text
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -237,11 +238,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# ciscn_2019_c_1
-## 思路
+## ciscn_2019_c_1
+### 思路
 ret2libc，利用puts泄露地址
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -289,15 +290,15 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# get_started_3dsctf_2016
-## 思路
+## get_started_3dsctf_2016
+### 思路
 三种思路
 1. 溢出到get_flag然后再溢出到exit，使程序正常退出并给我们回显flag
 2. 利用系统调用获取shell
 3. 利用mprotect修改保护情况，再写shellcode
 
-## exp
-### get_flag + exit
+### exp
+#### get_flag + exit
 ```python
 from pwn import *
 
@@ -323,7 +324,7 @@ p.sendline(payload)
 p.interactive()
 ```
 
-### 系统调用
+#### 系统调用
 ```python
 from pwn import *
 
@@ -344,7 +345,7 @@ p.sendline(payload)
 p.interactive()
 ```
 
-### mprotect + shellcode
+#### mprotect + shellcode
 ```python
 from pwn import *
 
@@ -383,11 +384,11 @@ p.sendline(shellcode)
 p.interactive()
 ```
 
-# jarvisoj_level2_x64
-## 思路
+## jarvisoj_level2_x64
+### 思路
 64位传参
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -408,11 +409,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# [HarekazeCTF2019]baby_rop
-## 思路
+## [HarekazeCTF2019]baby_rop
+### 思路
 64位传参
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -430,11 +431,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# [OGeek2019]babyrop
-## 思路
+## [OGeek2019]babyrop
+### 思路
 ret2libc，利用write泄露地址
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -477,15 +478,15 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# others_shellcode
-## 思路
+## others_shellcode
+### 思路
 直接连接就有shell了
 
-# ciscn_2019_n_5
-## 思路
+## ciscn_2019_n_5
+### 思路
 ret2libc
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -524,11 +525,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# not_the_same_3dsctf_2016
-## 思路
+## not_the_same_3dsctf_2016
+### 思路
 利用write输出flag就好了
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -550,11 +551,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# ciscn_2019_en_2
-## 思路
+## ciscn_2019_en_2
+### 思路
 和之前第11题相同
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -604,11 +605,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# ciscn_2019_ne_5
-## 思路
+## ciscn_2019_ne_5
+### 思路
 32位传参
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -641,11 +642,11 @@ overflow(payload)
 p.interactive()
 ```
 
-# 铁人三项(第五赛区)_2018_rop
-## 思路
+## 铁人三项(第五赛区)_2018_rop
+### 思路
 ret2libc
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -674,11 +675,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# bjdctf_2020_babystack2
-## 思路
+## bjdctf_2020_babystack2
+### 思路
 有个有符号整数与无符号整数的转换漏洞
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -698,13 +699,13 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# bjdctf_2020_babyrop
+## bjdctf_2020_babyrop
 
-# jarvisoj_fm
-## 思路
+## jarvisoj_fm
+### 思路
 格式化字符串漏洞
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -719,17 +720,17 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# jarvisoj_tell_me_something
+## jarvisoj_tell_me_something
 
-# ciscn_2019_es_2
-## 思路
+## ciscn_2019_es_2
+### 思路
 栈迁移
 利用第一次输出泄露调用vuln函数时压入的ebp，即main_ebp
 构造 `b'AAAA' + p32(system_plt) + p32(main) + p32(main_ebp-offset) + b'/bin/sh'`
 调试获取main_ebp与'/bin/sh'的偏移offset
 最后利用两次leave_ret转移esp，第一次是程序中的leave，用于转移ebp;第二次是leave_ret的gadget，这次会转移esp
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -756,11 +757,11 @@ p.send(payload2)
 p.interactive()
 ```
 
-# HarekazeCTF2019-baby_rop2
-## 思路
+## HarekazeCTF2019-baby_rop2
+### 思路
 ret2libc
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -799,12 +800,12 @@ p.sendline(payload2)
 p.interactive()
 ```
 
-# pwn2_sctf_2016
-## 思路
+## pwn2_sctf_2016
+### 思路
 ret2libc
 这次用的LibcSearcher找libc
 
-## exp
+### exp
 ```python
 from pwn import *
 from LibcSearcher import *
@@ -846,11 +847,11 @@ p.sendline(payload)
 p.interactive()
 ```
 
-# picoctf_2018_rop_chain
-## 思路
+## picoctf_2018_rop_chain
+### 思路
 达成几个条件即可获取flag
 
-## exp
+### exp
 ```python
 from pwn import *
 
@@ -878,17 +879,17 @@ p.recvuntil(b'input> ')
 p.sendline(payload2)
 p.interactive()
 ```
-# jarvisoj_level3
+## jarvisoj_level3
 
-# ciscn_2019_s_3
-## 思路
+## ciscn_2019_s_3
+### 思路
 泄露栈上的地址，计算偏移，构造'/bin/sh'字符串
 之后有两个思路
 1. 利用ROPgadget布置寄存器获取shell
 2. 利用sigreturn布置寄存器获取shell
 
-## exp
-### ROPgadget
+### exp
+#### ROPgadget
 ```python
 from pwn import *
 
@@ -927,7 +928,7 @@ p.interactive()
 
 ```
 
-### srop
+#### srop
 ```python
 from pwn import *
 
@@ -973,10 +974,10 @@ p.sendline(payload2)
 p.interactive()
 ```
 
-# ez_pz_hackover_2016
+## ez_pz_hackover_2016
 
-# wustctf2020_getshell
-## exp
+## wustctf2020_getshell
+### exp
 ```python
 from pwn import *
 
@@ -990,15 +991,15 @@ p.send(payload)
 p.interactive()
 ```
 
-# jarvisoj_level3_x64
+## jarvisoj_level3_x64
 
-# babyheap_0ctf_2017
+## babyheap_0ctf_2017
 
-# actf_2019_babyheap
-## 思路
+## actf_2019_babyheap
+### 思路
 堆入门题，UAF漏洞
 
-## exp
+### exp
 ```python
 from pwn import *
 
