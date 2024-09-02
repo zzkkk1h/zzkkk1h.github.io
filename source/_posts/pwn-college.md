@@ -1401,3 +1401,350 @@ same with levle17
 
 same with levle17
 同上
+
+## Cryptography
+### challenge
+In this series of challenges, you will be working with various cryptographic mechanisms.
+
+#### level1
+> Decode base64-encoded data
+
+```shell
+In this challenge you will decode base64 data.
+Despite base64 data appearing "mangled", it is not an encryption scheme.
+It is an encoding, much like base2, base10, base16, and ascii.
+It is a popular way of encoding raw bytes.
+```
+
+#### level2
+> Decrypt a secret encrypted with a one-time pad, assuming a securely transferred key
+
+```shell
+In this challenge you will decrypt a secret encrypted with a one-time pad.
+Although simple, this is the most secure encryption mechanism, if you could just securely transfer the key.
+
+
+key (b64): HRjtTI18KTXXpoh9pX1zgxFP+ZxZouUMBnzRRSHEstzHaCFCpFiO2y9HQZg1K3a3rCVnLIbc12YtKg==
+secret ciphertext (b64): bW+DYu4TRVmywe0G9B4ptkYIuMwP16xgRRj8IxWD/bnyMFA3kGnH9UsVO9ZPZjL7mXQdYv+FrTFQIA==
+```
+
+```python
+import base64
+
+key = "HRjtTI18KTXXpoh9pX1zgxFP+ZxZouUMBnzRRSHEstzHaCFCpFiO2y9HQZg1K3a3rCVnLIbc12YtKg=="
+secret = "bW+DYu4TRVmywe0G9B4ptkYIuMwP16xgRRj8IxWD/bnyMFA3kGnH9UsVO9ZPZjL7mXQdYv+FrTFQIA=="
+
+key = base64.b64decode(key)
+secret = base64.b64decode(secret)
+
+flag = ""
+for i in range(len(key)):
+    flag+= chr(secret[i]^key[i])
+
+print(flag)
+```
+
+#### level3
+> Decrypt a secret encrypted with a one-time pad, where the key is reused for arbitrary data
+
+```shell
+In this challenge you will decrypt a secret encrypted with a one-time pad.
+You can encrypt arbitrary data, with the key being reused each time.
+
+
+secret ciphertext (b64): B1F6vDejRjt6Z4ZbU1lAXl2Ji7LRbFISvHJ46fPojbPwZc7gYAk2NQHHMulAPmOHB0hFH9wce0VpAA==
+plaintext (b64): AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+ciphertext (b64): dyYUklTMKlcfAOMgCjsvCCTM4MqHCDtZyjABvrqr2+ahIKu1AltjG2WRSKc6cyfLMhk/UaVFARIUCg==
+```
+
+```python
+import base64
+
+secret = 'B1F6vDejRjt6Z4ZbU1lAXl2Ji7LRbFISvHJ46fPojbPwZc7gYAk2NQHHMulAPmOHB0hFH9wce0VpAA=='
+secret = base64.b64decode(secret)
+
+print(base64.b64encode(b'\0'*len(secret)))
+# AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+
+key = "dyYUklTMKlcfAOMgCjsvCCTM4MqHCDtZyjABvrqr2+ahIKu1AltjG2WRSKc6cyfLMhk/UaVFARIUCg=="
+key = base64.b64decode(key)
+
+flag = ""
+for i in range(len(key)):
+    flag+= chr(secret[i]^key[i])
+
+print(flag)
+```
+
+#### level4
+> Decrypt a secret encrypted with AES using the ECB mode of operation
+
+```shell
+In this challenge you will decrypt a secret encrypted with Advanced Encryption Standard (AES).
+The Electronic Codebook (ECB) block cipher mode of operation is used.
+
+
+key (b64): N0EJNox2NpWKmu2HM2bYRg==
+secret ciphertext (b64): cg56PmUGqzUdt/Ai1MNZP4XLMypLuY+57rG5wbrUOWP3zPdtpRt5vqZe2tP67Pmrz4/h2+C8tLvXzjO73wbU/w==
+```
+
+```python
+import base64
+from Crypto.Cipher import AES
+
+key = "N0EJNox2NpWKmu2HM2bYRg=="
+secret = "cg56PmUGqzUdt/Ai1MNZP4XLMypLuY+57rG5wbrUOWP3zPdtpRt5vqZe2tP67Pmrz4/h2+C8tLvXzjO73wbU/w=="
+key = base64.b64decode(key)
+secret = base64.b64decode(secret)
+
+aes = AES.new(key, AES.MODE_ECB )
+
+print(aes.decrypt(secret))
+```
+
+#### level5
+> Decrypt a secret encrypted with AES-ECB, where arbitrary data is appended to the secret and the key is reused. This level is quite a step up in difficulty (and future levels currently do not build on this level), so if you are completely stuck feel free to move ahead. Check out this lecture video on how to approach level 5.
+
+```shell
+In this challenge you will decrypt a secret encrypted with Advanced Encryption Standard (AES).
+The Electronic Codebook (ECB) block cipher mode of operation is used.
+You can encrypt arbitrary data, which has the secret appended to it, with the key being reused each time.
+
+
+secret ciphertext (b64): z+IDlVYk0Dn3Hclscr9Crl+FRhl/kopRq7U/Sgt9Y80FS/Hf/A1/fb+L4cCRMv48DQnUwESEGmMNfctJzVU7Vg==
+secret ciphertext (hex): cfe203955624d039f71dc96c72bf42ae 5f8546197f928a51abb53f4a0b7d63cd 054bf1dffc0d7f7dbf8be1c09132fe3c 0d09d4c044841a630d7dcb49cd553b56
+plaintext prefix (b64): 
+
+```
+
+```python
+from Crypto.Util.Padding import pad
+from pwn import *
+import base64
+
+p = process("/challenge/run")
+
+def aes_encrypt(plaintext):
+    p.recvuntil(b'plaintext prefix (b64): ')
+    p.sendline(base64.b64encode(plaintext))
+    p.recvuntil(b'ciphertext (b64): ')
+    cipher = base64.b64decode(p.recvline()[:-1])
+    p.recvuntil(b'ciphertext (hex): ')
+    hexcipher = (p.recvline()[:-2].decode()).split(" ")
+    return cipher,hexcipher
+
+secret = aes_encrypt(b"")
+flag_len = len(secret[0])
+
+padding_test = aes_encrypt(b'\x10'*16)
+if padding_test[1][0]==secret[1][-1]:
+    flag_padding = 16
+else:
+    for i in range(1,16):
+        res = aes_encrypt(b'a'*i)
+        if len(res[0]) > flag_len:
+            flag_padding = i
+            break
+
+flag_len -= flag_padding
+flag = ""
+
+for i in range(flag_len):
+    block = (i+1)//16 + 1
+    target = aes_encrypt(b'a'*(flag_padding+i+1))
+    round_success = False
+    for j in range(0,256):
+        senddata = chr(j)+flag[:15]
+        senddata = pad(senddata.encode(),16)
+        res = aes_encrypt(senddata) 
+        if res[1][0]==target[1][-block]:
+            flag = chr(j)+flag
+            round_success = True
+            break
+    if round_success==False:
+        print("error")
+        exit(-1)
+    else:
+        log.success("flag : " + flag)
+
+print(flag)
+```
+
+#### level6
+> Perform a Diffie-Hellman key exchange to establish a shared secret
+
+```shell
+In this series of challenges, you will be working with various cryptographic mechanisms.
+
+In this challenge you will perform a Diffie-Hellman key exchange.
+
+
+p: 0xffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aacaa68ffffffffffffffff
+g: 0x2
+A: 0xc1c09760c9dedd93dc0a15fe9af7466b23591b379bd5f17f1482e015aac5ee0417b535c64a19096c56f9bd193daa37c27ce5a320484ad9f8b66a416da09d488f4244543c57e20e5e3cb3ce716d3b5a037bd95bd5ad9dc56fe18f829a877d1441deb8c5fdfb6576a94c63e166b98bda836895c7eec6d30672d739d3e6990e74fd931f5a4038dc7b4cba8d87c3c9a3cf09ff203a7e02ae297659b0b534229e859c1fc06b9a7cf41167386560aade7b5526ea4ce319ffe1c5c581925d72597ede72c9349069d8d25efd81e9e6ebe2a0c565ed173d0fff44089a73b82ce8352d98812274184ba6d49c0c13d8af240e75ddb1ab521fd2e069ca86cc46b3ad5cd0ac7
+B: 0xb53f64b421db954ff626bbe4e32e7673b9d94864be22af94ef01fc8e091b7d14d357818519fcb4a1ef388df179d1bbde84339af1b16d2aa5bc4435ce37dd229e694f3530285d4ff63f3c47b28548fb482b2c8a9a7e1c8b850d418514bf9581b181c79619ed0d6aabaf01936964f7a9a44581a3385193f3f013c8d6b0b26bcf0cb877d60b43557616c41750c8cf9af53fbf68c019786b99b36e53c3588136a08c3efa2f417cc165312aeddbee92a3206871fc73ad2eac5c19ae09c9e3499e879ff74b42792dc01618bff6569549027866717663cfa1e53b2713a2642fc5c6d6b50587c60879cb20189e50aeef85af3c794e059cd8250964e8c44d71a5e59fbd9d
+secret ciphertext (b64): vvhJt4t2G/vdwh8xG5t+IYia0nFJD+p8gflyMkoEnVBHtYwshkPd3Ai35VrHMOSEH+qM/z8HlZP5EQ==
+```
+
+```python
+from Crypto.Util.number import getRandomNBitInteger
+from Crypto.Util.number import long_to_bytes
+from Crypto.Util.strxor import strxor
+import base64
+
+p = 0xffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aacaa68ffffffffffffffff
+g = 0x2
+A = 0xc1c09760c9dedd93dc0a15fe9af7466b23591b379bd5f17f1482e015aac5ee0417b535c64a19096c56f9bd193daa37c27ce5a320484ad9f8b66a416da09d488f4244543c57e20e5e3cb3ce716d3b5a037bd95bd5ad9dc56fe18f829a877d1441deb8c5fdfb6576a94c63e166b98bda836895c7eec6d30672d739d3e6990e74fd931f5a4038dc7b4cba8d87c3c9a3cf09ff203a7e02ae297659b0b534229e859c1fc06b9a7cf41167386560aade7b5526ea4ce319ffe1c5c581925d72597ede72c9349069d8d25efd81e9e6ebe2a0c565ed173d0fff44089a73b82ce8352d98812274184ba6d49c0c13d8af240e75ddb1ab521fd2e069ca86cc46b3ad5cd0ac7
+b = getRandomNBitInteger(1024)
+B = pow(g,b,p)
+print(hex(B))
+
+b64chiper = input("input b64chiper: ")
+chiper = base64.b64decode(b64chiper)
+
+s = pow(A,b,p)
+key = s.to_bytes(256,"little")
+
+flag = strxor(chiper,key[:len(chiper)])
+print(flag)
+
+```
+
+#### level7
+> Decrypt an RSA-encrypted secret using provided public and private keys
+
+```shell
+In this series of challenges, you will be working with various cryptographic mechanisms.
+
+In this challenge you will decrypt a secret encrypted with RSA (Rivest–Shamir–Adleman).
+You will be provided with both the public key and private key.
+
+
+e: 0x10001
+d: 0x69c8e5572e7909a99ecf482a5d4a6c245ee3db5ffd2833fc1ea0421a43e75869d6c415a6b36ae666e11800b8e260dbd3b8cf268bfc592ecac73d02b1238be480abacfa57ad7e012aa2abf47b656572f04f09a9659406c13c2496d4e5828d6092b240156324c5813a4092c4d5d0ce662be7d8db7bd2ce5c41d5609ab8f906683a3f5632dc5394bdcf426a8439f513f82914ac343121f59fccef286f16998010a2922b5364207774137eab956608b239baf040b113fbec410945e92a9bfeff566b4b1c27a878622fc201f50cf5374acb42aa36dda5909b3b44bcf0c08b3dfbd3010c01c87c54e549563bf056bdb132b68c25a5ac82a37a10eaaf7302c8dbc29c81
+n: 0xe2794928683c255a7d1d31b03b50a984ed09046a0b3db9fd69a4265b1a8a415f7edcade6b853fa20a4d63c26f67b26bdb4a0285e38d7c8e7eeabafb3c8b6d7dd1426b8384359cdf67712d3678bdd8c5ff42cc2cfd7b1c4d0ea95341e91cda626c281c95e3fd46e1e5254cf557289aced59ec2872a7cee2dda8d8e58db2301cea181c71663bb3f5abdaae459fbc358a8d40340223c742a2b142b82eeeb53b12370f93e8bdf62a801bcc3e5a1ae8060bce87c033f3a573e65a984a301cabb29530256887c38ac69cece9abba3eac28dfb4ef1825c39295d2911dacb1bc06ae512f008bebe86b6fba9c074b481f6185a7be3e823cf577de0c8224fb788d32a736cf
+secret ciphertext (b64): fFFCmUmD42Qiesdwsm9RX6dqYjjQRyqBAtMbcnnPklcslRrnHx2JjguShjB8uFN6e+r9dq6okTRZIGax4dxau85Btmj457FviQm0+sUxdTw7mmQNEir29Q2+/VrJTsQ4oV2b1ITtlzLlfC8QVRV5Qmzh857ecrboiqvDh8sj6ye1IeepnPrLm0WS/WFJNFXeZJzvctBjzSSCMx6665VjwDZnlPctFH87zoKeMWgudDfTQ2ZKaZjul7GQsqegdV//u8z5T9auBaoEQCiskWYzJDMo+2n34x24TH3ml6aTY5InuEZNX7sFG/W4WMHOtbRRIwfWqLT7/cT9BEOfIkTrYA==
+```
+
+```python
+from Crypto.Util.number import long_to_bytes,bytes_to_long
+import base64
+
+e = 0x10001
+d = 0x69c8e5572e7909a99ecf482a5d4a6c245ee3db5ffd2833fc1ea0421a43e75869d6c415a6b36ae666e11800b8e260dbd3b8cf268bfc592ecac73d02b1238be480abacfa57ad7e012aa2abf47b656572f04f09a9659406c13c2496d4e5828d6092b240156324c5813a4092c4d5d0ce662be7d8db7bd2ce5c41d5609ab8f906683a3f5632dc5394bdcf426a8439f513f82914ac343121f59fccef286f16998010a2922b5364207774137eab956608b239baf040b113fbec410945e92a9bfeff566b4b1c27a878622fc201f50cf5374acb42aa36dda5909b3b44bcf0c08b3dfbd3010c01c87c54e549563bf056bdb132b68c25a5ac82a37a10eaaf7302c8dbc29c81
+n = 0xe2794928683c255a7d1d31b03b50a984ed09046a0b3db9fd69a4265b1a8a415f7edcade6b853fa20a4d63c26f67b26bdb4a0285e38d7c8e7eeabafb3c8b6d7dd1426b8384359cdf67712d3678bdd8c5ff42cc2cfd7b1c4d0ea95341e91cda626c281c95e3fd46e1e5254cf557289aced59ec2872a7cee2dda8d8e58db2301cea181c71663bb3f5abdaae459fbc358a8d40340223c742a2b142b82eeeb53b12370f93e8bdf62a801bcc3e5a1ae8060bce87c033f3a573e65a984a301cabb29530256887c38ac69cece9abba3eac28dfb4ef1825c39295d2911dacb1bc06ae512f008bebe86b6fba9c074b481f6185a7be3e823cf577de0c8224fb788d32a736cf
+b64cipher = "fFFCmUmD42Qiesdwsm9RX6dqYjjQRyqBAtMbcnnPklcslRrnHx2JjguShjB8uFN6e+r9dq6okTRZIGax4dxau85Btmj457FviQm0+sUxdTw7mmQNEir29Q2+/VrJTsQ4oV2b1ITtlzLlfC8QVRV5Qmzh857ecrboiqvDh8sj6ye1IeepnPrLm0WS/WFJNFXeZJzvctBjzSSCMx6665VjwDZnlPctFH87zoKeMWgudDfTQ2ZKaZjul7GQsqegdV//u8z5T9auBaoEQCiskWYzJDMo+2n34x24TH3ml6aTY5InuEZNX7sFG/W4WMHOtbRRIwfWqLT7/cT9BEOfIkTrYA=="
+
+cipher = base64.b64decode(b64cipher)
+c = bytes_to_long(cipher[::-1])
+m = pow(c,d,n)
+flag = long_to_bytes(m)[::-1]
+
+print(flag)
+```
+
+#### level8
+> Decrypt an RSA-encrypted secret using the provided prime factors of n
+
+```shell
+In this series of challenges, you will be working with various cryptographic mechanisms.
+
+In this challenge you will decrypt a secret encrypted with RSA (Rivest–Shamir–Adleman).
+You will be provided with the prime factors of n.
+
+
+e: 0x10001
+p: 0xeb0eedde9f594d1b111f52728bf67e5925bf2a3bae9a30c618ac2e74865d15b758e2462dcae46926dc7ea84f383c5d21df36a75e8236055ca4c07c77e798d801ed1ca516707e284e6b129762c7ba5e42591cceaf56f170bc530fb4fe6991120fb74cc1a7826a80ca43221822559d502ab25bb5d04516e02ae20a25aa03694e45
+q: 0xffb7dc5f2b9822aa854d05d9aaef7d3c84eae9cb826e78fe32d1498562e2b535931e6f49e05023ec423641f8fe850de5a7f8132d1856f2e018437c71b39e038a5e820e88db5fbe3d4a8c84a287e77d894ad3dfeffd92fa09b2c4353680130a105099b86b0d0ad71350951c3b67889ab9c1c8326d50e8f0a02b855e0a92f48d3f
+secret ciphertext (b64): fwcvHfWZXTYBJXUc5Fa1qo/lgox68yZ4wnvG9PsqV2WFgKHrRxejnOKdoV8AFb4RxLGnHoYBXE/4AUsHmTIU0uffmnj4xxslpo0wwVOlXwnR7Z4mgejZnRtN2ZsfzKuWVCxnaKYbV9KCbfPe83TqqiWnnp8OwdS2UMWvAUds3G7gbyJK/JhbW5ezbk1iIK3qb5rKjYJpRtJ0fciF4EzxlzHeksAjYl19tuDQbnHO/e/A7DrTb6kJ3bdaBgCU9QqfqqzoJbzxwJMvWnQxCwCkMd5hvkTljJelLnUenJoLTMrO57+Qd1yXiMxK6eZ4R1Kzm79ZwWWRLPAdn/LjuLiXBA==
+```
+
+```python
+from Crypto.Util.number import long_to_bytes,bytes_to_long
+import base64
+import libnum
+
+e = 0x10001
+p = 0xeb0eedde9f594d1b111f52728bf67e5925bf2a3bae9a30c618ac2e74865d15b758e2462dcae46926dc7ea84f383c5d21df36a75e8236055ca4c07c77e798d801ed1ca516707e284e6b129762c7ba5e42591cceaf56f170bc530fb4fe6991120fb74cc1a7826a80ca43221822559d502ab25bb5d04516e02ae20a25aa03694e45
+q = 0xffb7dc5f2b9822aa854d05d9aaef7d3c84eae9cb826e78fe32d1498562e2b535931e6f49e05023ec423641f8fe850de5a7f8132d1856f2e018437c71b39e038a5e820e88db5fbe3d4a8c84a287e77d894ad3dfeffd92fa09b2c4353680130a105099b86b0d0ad71350951c3b67889ab9c1c8326d50e8f0a02b855e0a92f48d3f
+b64cipher = "fwcvHfWZXTYBJXUc5Fa1qo/lgox68yZ4wnvG9PsqV2WFgKHrRxejnOKdoV8AFb4RxLGnHoYBXE/4AUsHmTIU0uffmnj4xxslpo0wwVOlXwnR7Z4mgejZnRtN2ZsfzKuWVCxnaKYbV9KCbfPe83TqqiWnnp8OwdS2UMWvAUds3G7gbyJK/JhbW5ezbk1iIK3qb5rKjYJpRtJ0fciF4EzxlzHeksAjYl19tuDQbnHO/e/A7DrTb6kJ3bdaBgCU9QqfqqzoJbzxwJMvWnQxCwCkMd5hvkTljJelLnUenJoLTMrO57+Qd1yXiMxK6eZ4R1Kzm79ZwWWRLPAdn/LjuLiXBA=="
+
+cipher = base64.b64decode(b64cipher)
+c = bytes_to_long(cipher[::-1])
+
+n = p * q
+phi = (p-1) * (q-1)
+d = libnum.invmod(e,phi)
+m = pow(c,d,n)
+flag = long_to_bytes(m)[::-1]
+
+print(flag)
+```
+
+后面待补充
+
+#### level9
+> Find a small hash collision using SHA256, considering only the first 2 bytes
+
+```shell
+
+```
+
+```python
+
+```
+
+#### level10
+> Compute a small proof-of-work by appending response data to the challenge data, resulting in a SHA256 hash with 2 null-bytes
+
+```shell
+
+```
+
+```python
+
+```
+
+#### level11
+> Complete an RSA challenge-response using provided public and private keys
+
+```shell
+
+```
+
+```python
+
+```
+
+#### level12
+> Complete an RSA challenge-response by providing the public key
+
+```shell
+
+```
+
+```python
+
+```
+
+#### level13
+> Sign a user certificate using a provided self-signed root certificate and root private key
+
+```shell
+
+```
+
+```python
+
+```
+
+#### level14
+> Perform a simplified TLS handshake as the server, completing a Diffie-Hellman key exchange and establishing an encrypted channel to provide a user certificate and prove private key ownership
+
+```shell
+
+```
+
+```python
+
+```
