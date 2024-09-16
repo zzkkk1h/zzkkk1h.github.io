@@ -1,5 +1,5 @@
 ---
-title: basectf2024-wp
+title: basectf2024 wp
 date: 2024-09-16 22:08:24
 category: wp
 tags:

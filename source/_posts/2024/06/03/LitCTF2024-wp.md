@@ -1,5 +1,5 @@
 ---
-title: LitCTF2024-wp
+title: LitCTF2024 wp
 date: 2024-06-03 00:43:27
 category: wp
 tags:
