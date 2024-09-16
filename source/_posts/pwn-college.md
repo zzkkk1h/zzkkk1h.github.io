@@ -1,7 +1,7 @@
 ---
 title: pwn.college
 date: 2024-09-01 13:58:23
-category: pwn
+category: wp
 tags:
 ---
 
@@ -1681,57 +1681,136 @@ flag = long_to_bytes(m)[::-1]
 print(flag)
 ```
 
-后面待补充
-
 #### level9
 > Find a small hash collision using SHA256, considering only the first 2 bytes
 
 ```shell
+In this challenge you will hash data with a Secure Hash Algorithm (SHA256).
+You will find a small hash collision.
+Your goal is to find data, which when hashed, has the same hash as the secret.
+Only the first 2 bytes of the SHA256 hash are considered.
 
+
+secret sha256[:2] (b64): mMQ=
+collision (b64):
 ```
 
 ```python
+import base64
+from hashlib import sha256
 
+secret = base64.b64decode("mMQ=")
+
+for i in range(256):
+    for j in range(256):
+        for k in range (256):
+            ans = bytes([i, j, k])
+            sha256_ans = sha256(ans).digest()
+            if sha256_ans[:2] == secret[:2]:
+                print(base64.b64encode(ans).decode())
+                break
 ```
 
 #### level10
 > Compute a small proof-of-work by appending response data to the challenge data, resulting in a SHA256 hash with 2 null-bytes
 
 ```shell
+In this challenge you will hash data with a Secure Hash Algorithm (SHA256).
+You will compute a small proof-of-work.
+Your goal is to find response data, which when appended to the challenge data and hashed, begins with 2 null-bytes.
 
+
+challenge (b64): P6Q7okZS0h5ckIDGB9SGOLuxd+ZBuIzWNTlToOQGYrU=
+response (b64):
 ```
 
 ```python
+from hashlib import sha256
+import base64
 
+challenge = base64.b64decode("P6Q7okZS0h5ckIDGB9SGOLuxd+ZBuIzWNTlToOQGYrU=")
+
+i = 0
+while True:
+    if sha256(challenge + str(i).encode()).digest()[:2] == b"\0\0":
+        print(i)
+        print(base64.b64encode(str(i).encode()))
+        break
+    i += 1
 ```
 
 #### level11
 > Complete an RSA challenge-response using provided public and private keys
 
 ```shell
+In this challenge you will complete an RSA challenge-response.
+You will be provided with both the public key and private key.
 
+
+e: 0x10001
+d: 0x2a2d9ce51936251ddaabdd033214cb73750741c657dd57d5099c6fa0d53c6bb2c8db94871402ce97bd7959f15d15f30cfc018d13f146b0caebd40eb5db1d867b323d0291c0208cb5252f47ef2b4459d3a2ff91b4a2547c2c786e12eb6f679d08922b90e0d1057c7a5fe68cca785847f2f664fb8fb1fd8f314ed9aaecf78d525b1ffa0e6d175fd8e74729d94134c8a82f0dc7f1283a6d56e5894a99049eb4d0d5c1ee9758d59ff02db14cde859ffb832cc7cc64387c4178578f7e842f4928a21e7b40c99d4295ad512e579856a4b02d8380d88e56d7884280508b7a141999430bbb55eeed60f6d49fde7c552314308a42481c0dc453a1c790dd3a86660c0feb59
+n: 0xe0c0a43e27a835de514134b43c876923ea537129449e9a09658b415d1f44da89ae14b7f959bad3128c1b0c0664056a2751f568356afadc362192dbe27b2b23f646110b1185087284212558138c97e30692e4c4a959617c5899950a605651cf96be8a65e006cab98a1260b8309042f239c9ec19a867046aa185e1308843521cb304516f324d48b2900903c4067e4f6fc37286d76f8a4a5d45f5bb1b3dd4afb1ae24bdbf46b52e31fc230d0ca12774538f1cbc9e3ff58a90878e103451278be8a88bd96de03bd083e16daaeafc35d6726b7084d0c6191744588579e3779f0d6eb2aaac97451239fd03c56f32d56706c1f67c000d0d050c068664a458a65af4d62f
+challenge: 0xd0b3436468b8f3295c5fa753d49d58ce314bf3bab799deda1afb25e00936802518db9a902471e597391d0a19d2a80d7d32db15d7444c3cd601deecdf53400d6041e81086c13f07497765c4f122af8644c639491dbefa264f99d3efdb30bc722e775a3d6ccb462e872ef73d837f065328f7e954aed0fb1ae6db930c1bb82a04f3a68c75c9b26197142f17f0a82dbce181a86b4cacf5c96cbaf796167957562f66705fab010b2738929dd2be083a79cd03fb91cf8446356e6a94d92b8e5b873e6a0e3b6a99d604dc53e71d7501287c3a3d70fb0d6d9a6be45cbaef43b04e752537fa32f0d4eb82f5e6ce1e05e511025d7d5a63d1e170432cb6537acf7d30596af8
+response:
 ```
 
 ```python
+from Crypto.Util.number import long_to_bytes
 
+e = 0x10001
+d = 0x2a2d9ce51936251ddaabdd033214cb73750741c657dd57d5099c6fa0d53c6bb2c8db94871402ce97bd7959f15d15f30cfc018d13f146b0caebd40eb5db1d867b323d0291c0208cb5252f47ef2b4459d3a2ff91b4a2547c2c786e12eb6f679d08922b90e0d1057c7a5fe68cca785847f2f664fb8fb1fd8f314ed9aaecf78d525b1ffa0e6d175fd8e74729d94134c8a82f0dc7f1283a6d56e5894a99049eb4d0d5c1ee9758d59ff02db14cde859ffb832cc7cc64387c4178578f7e842f4928a21e7b40c99d4295ad512e579856a4b02d8380d88e56d7884280508b7a141999430bbb55eeed60f6d49fde7c552314308a42481c0dc453a1c790dd3a86660c0feb59
+n = 0xe0c0a43e27a835de514134b43c876923ea537129449e9a09658b415d1f44da89ae14b7f959bad3128c1b0c0664056a2751f568356afadc362192dbe27b2b23f646110b1185087284212558138c97e30692e4c4a959617c5899950a605651cf96be8a65e006cab98a1260b8309042f239c9ec19a867046aa185e1308843521cb304516f324d48b2900903c4067e4f6fc37286d76f8a4a5d45f5bb1b3dd4afb1ae24bdbf46b52e31fc230d0ca12774538f1cbc9e3ff58a90878e103451278be8a88bd96de03bd083e16daaeafc35d6726b7084d0c6191744588579e3779f0d6eb2aaac97451239fd03c56f32d56706c1f67c000d0d050c068664a458a65af4d62f
+c = 0xd0b3436468b8f3295c5fa753d49d58ce314bf3bab799deda1afb25e00936802518db9a902471e597391d0a19d2a80d7d32db15d7444c3cd601deecdf53400d6041e81086c13f07497765c4f122af8644c639491dbefa264f99d3efdb30bc722e775a3d6ccb462e872ef73d837f065328f7e954aed0fb1ae6db930c1bb82a04f3a68c75c9b26197142f17f0a82dbce181a86b4cacf5c96cbaf796167957562f66705fab010b2738929dd2be083a79cd03fb91cf8446356e6a94d92b8e5b873e6a0e3b6a99d604dc53e71d7501287c3a3d70fb0d6d9a6be45cbaef43b04e752537fa32f0d4eb82f5e6ce1e05e511025d7d5a63d1e170432cb6537acf7d30596af8
+
+m = hex(pow(c,d,n))
+print(m)
 ```
 
 #### level12
 > Complete an RSA challenge-response by providing the public key
 
 ```shell
+In this challenge you will complete an RSA challenge-response.
+You will provide the public key.
 
+e:
 ```
 
 ```python
+import base64
 
+e = 0x10001
+n = 0x554f65ccb6cd9db91fceb4a32bd6173b09f9324de043cc9037c2c5e7fc2bb241556c0b75787a54bbc112006a66649144abdc570c87810dd7431e09ceaa6ffb680f3306d6355719419b1e59
+p = 0x84a7b001cfa7c6d9a3c200e02911dc8407b6f866b6274f2befed0ca37b45e80f1c50d25313d
+q = 0xa4a20d5fd52bff62c545f5e59bec13171d23f30377eee42e8e34af89e37fb2f70951fff7b4d
+d = 0xd4806263fd37519ac1d073c5c07c1a81c5e6279834faada4d0412c1921dcf6ba27be6b0cc2502e1353888f9c1c88d8027e9abb468de664629d0c6b32c0437040ce375cb2afbdb7fb90cf1
+
+challenge = 0x503bc7acf3ed48873eb4bcc536595ab8b9c1735623fc2a20ccbb996dfcc9b5267b4c35ca7ef1427f18fd51fdb36df4c3766ef7014a041165697e83634bbefdc6
+response = hex(pow(challenge,d,n))
+# print(response)
+
+secret = b"5armTxpBW9R088ISVKmp9xDOT67NLuOpbza/kW2BAIZfrjrluu15Xv3UyItjM3T8YVs/cbjYmUuxxzBLX3/hPwMegGGYlYxVfIdOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+secret = base64.b64decode(secret)
+
+c = int.from_bytes(secret, byteorder='little')
+m = pow(c,d,n)
+flag =  m.to_bytes((m.bit_length() + 7) >> 3, byteorder='little')
+print(flag)
 ```
 
 #### level13
 > Sign a user certificate using a provided self-signed root certificate and root private key
 
 ```shell
+In this challenge you will work with public key certificates.
+You will be provided with a self-signed root certificate.
+You will also be provided with the root private key, and must use that to sign a user certificate.
 
+
+root key d: 0x375eb69bcd972b471de0cfa0de19042475f267a252b5348a4733d3d3c4b0f1912c88a7bca3974a900bd7fb52bfbbb263f1cc68bf9efe5d32376dbf0577627ec078c086c7969601571c7e2f6d56f6af3b3a595e414e8628dc93aa739303c0bb17a50c8d6d488b14661454815a42c42e47d55044fe85a5e4185bb7cd4b892cbf61f0cf704e812bbf96cf86dc8e87d6f7f1884a7941e08b72869b09c88634242bbdadf767086c8e5157276c8ddcb1de9bdb3e3fe319fb5c94e9888b0679451978d1052560b120e3af96790da08c5bd0b4a641a442b0cee2de459dd763d2d09d4a14f586fdbf7dcce27a66474620da6e3bc37b0e5b03c4054b52634945118a9c601
+root certificate (b64): eyJuYW1lIjogInJvb3QiLCAia2V5IjogeyJlIjogNjU1MzcsICJuIjogMjI1MzQ5OTA0NTk4MjI5ODEzNTk5NjE3Mjk5MjEyODY1MzA0MDcxODY3NzU2MjgyNDk1NTIxOTg1MjM3NTczNjgwOTAyMDcwMzMxMTIyOTQ2MzgxNDAyNTEyNzIwMTgwNTk4MzI1ODk3OTA0NjgxMDM2Mzc4Njg4MDY4NzAzMDU0OTY0NzQwODg0NDA2ODQxNTk0MjU4NDE4MjcxNDA1MDAwMTQxMjYzOTg4NDgyMjcyOTk5MTE4MTUxNTc5NTYyODY2MDM3MDczNzAxNTIwMDc0Njg4MDIzNDA3NjA0MTA1NDAwNDQ4MTM4NTI2NjM4NzY0MTAxNTk0OTc4NDg0MTg5NjMxMjk3MTA0MTY4NzQ5MzEyNjk5OTIyNjgyODA2ODg3Mjc0NTk1MzkwNzIxOTUyMzc5NDM1Mzk2NDgzMjc3MTc4MTkzNzEyNDQ0NDE4MjU3MDIwNDU1MTU0NjU3MDg1MTE0NDA4NTc0MDk5NTAxMzI2MDYxMjg2MzA1MzU4ODI5NDAzMTM5NDQ1ODU0NTE3NDk4ODUyNjUyNTY1NDIzNTA3OTgxNjI3NjE3OTk2MDEyNTE4OTY0NTMxNzY3OTMyNDkwODg5NDQ3NDQ5Mjg0Mzc1ODQzNTQzMjA1MTIxNTA2MjExNDkyODQ0NTI3NTQzNjkwMDE0NTM1NzgxMTk4ODY2NTAyODQ4Njk0ODM5MzU0NDQ0NzMxNTYxODE5OTc4Mjg0MjE1NTIyMjAwMjY4NTM4NzYwNjM0NDY4MDY3NzY1NDY2NTU1MTkyMDYxNDgwODE5MTEzMTkwMTU3MjMyODIzNTA4OTl9LCAic2lnbmVyIjogInJvb3QifQ==
+root certificate signature (b64): hwsElNfFo99DurQ2y8BlPfwPf3kVk6EPNjQntqm1avvysj4/2nLvzISC0NilKnV7K9H8X56w/GpkR6lHTodnZn7veHL5IyP3Bt9Q7jkw5NYQVtZt1z41klY2S2xd4j4YcGcP8M5VNJQQHqFBLXvIIQIRBdKt3HRw0GfSQZhPGgYJ1rUdPY/UDRRNTlaSW9gNZVJm2qJ4jW+I0/WC3YkVg3eNOgaljU6pdvbfl5T0cyHuvD22fgECSaZYxhtOfZX6TS/SOCXf8FVIuMbA202xsgtaVbfjgIbubAXQjZPT09Il8+t4f9D8N/6yx9Iq9/nGuBqCmexqqmy8McEnzfBaSg==
+user certificate (b64):
 ```
 
 ```python
