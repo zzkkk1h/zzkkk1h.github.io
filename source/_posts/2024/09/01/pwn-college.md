@@ -682,8 +682,8 @@ strlen_loop:
 
 .data
 sockaddr_in:
-	.short 2        # sin_family
-	.short 0x5000   # sin_port
+    .short 2        # sin_family
+    .short 0x5000   # sin_port
     .long 0         # sin_addr
     .rept 8
     .byte 0
