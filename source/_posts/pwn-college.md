@@ -1,8 +1,6 @@
 ---
 title: pwn.college
 date: 2024-09-01 13:58:23
-category: wp
-tags:
 ---
 
 > https://pwn.college

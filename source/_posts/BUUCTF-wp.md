@@ -1,8 +1,6 @@
 ---
 title: BUUCTF wp
 date: 2024-05-29 23:39:06
-category: wp
-tags: 
 ---
 
 > BUUCTF的部分wp

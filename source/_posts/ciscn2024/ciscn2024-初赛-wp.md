@@ -1,8 +1,6 @@
 ---
 title: ciscn2024 初赛 wp
 date: 2024-05-20 19:45:19
-category: wp
-tags:
 ---
 
 > pwn和web题目赛后环境 https://ctf.show/challenges
@@ -13,16 +11,16 @@ tags:
 go语言的栈溢出题，开始用的ida7.5，啥也逆不出来，后面换成ida8.3，都不用怎么逆就出来了
 这里放一下ida7.5和ida8.3打开后的截图
 
-![ida7.5](gostack-ida7.5.png)
-![ida8.3](gostack-ida8.3.png)
+![ida7.5](/img/post/ciscn2024/ciscn2024-初赛-wp/gostack-ida7.5.png)
+![ida8.3](/img/post/ciscn2024/ciscn2024-初赛-wp/gostack-ida8.3.png)
 上面第一张是ida7.5的，第二张是ida8.3的
 
 大致看一下代码，运行一下，用cyclic测量溢出点
 go语言运行报错后会直接打印错误的返回地址，就不用gdb调试了
-![](gostack-cyclic.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/gostack-cyclic.png)
 
 得出溢出点464
-![](gostack-cyclic-l.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/gostack-cyclic-l.png)
 
 其实main_main_func2就是后门函数，不过懒得看代码了，直接用系统调用获取shell
 
@@ -118,13 +116,13 @@ __malloc_trim (size_t s)
 }
 ```
 
-![](malloc_trim.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/malloc_trim.png)
 可知本题所用libc与main_arena的偏移为 0x3C4B20
 
 2. 利用malloc_hook算出
 main_arena与malloc_hook的地址差为0x10，而malloc_hook的值可以用pwntools直接查到
 
-![](malloc_hook_and_main_arena.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/malloc_hook_and_main_arena.png)
 
 
 ```python
@@ -823,17 +821,17 @@ typedef enum {
 ### 程序逆向
 #### protobuf message逆向
 分析ProtobufCMessageDescriptor
-![](ciscn2024-ezbuf-ProtobufCMessageDescriptor.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-ProtobufCMessageDescriptor.png)
 
 我在ida中还原了 ProtobufCMessageDescriptor 结构体，便于观察，实际做题可以不用还原
-![](ciscn2024-ezbuf-structure-insert.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-structure-insert.png)
 
 再将之前数据段的变量的类型转为该结构体，得到如下结果
-![](ciscn2024-ezbuf-data-struct.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-data-struct.png)
 
 发现n_fileds为5,表明其中含有5个变量，点进fields分析每个field
 
-![](ciscn2024-ezbuf-ProtobufCFieldDescriptor-field1.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-ProtobufCFieldDescriptor-field1.png)
 
 分析出第一个变量为bytes型，名为whatcon的变量，按照这样的方法依次提取出所有field，写到heybro.proto文件中
 ```
@@ -893,13 +891,13 @@ data.SerializeToString() # 转换成bytes
 
 #### 静态分析
 先看看主函数，稍微改了点名字，加了点注释
-![](ciscn2024-ezbuf-main.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-main.png)
 
 再看看menu函数
-![](ciscn2024-ezbuf-menu.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-menu.png)
 
 我们可以看到，程序读取输入，然后调用sub_1C87()解包数据，这个函数会直接调用另一个函数
-![](ciscn2024-ezbuf-sub_1C87.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-sub_1C87.png)
 
 我已经给这个函数改名了，这个函数是protobuf_c_message_unpack函数
 
@@ -1265,16 +1263,16 @@ p.interactive()
 ```
 编写这样的程序，调试运行。
 第一张是解包函数运行后的堆块变化
-![](ciscn2024-ezbuf-heap-cmp-1.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-heap-cmp-1.png)
 
 第二张是menu函数运行后的堆块变化
-![](ciscn2024-ezbuf-heap-cmp-2.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-heap-cmp-2.png)
 
 查看不同堆块的数据
-![](ciscn2024-ezbuf-heap-cmp-hexdump.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-heap-cmp-hexdump.png)
 
 最终运行结果
-![](ciscn2024-ezbuf-leak.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-leak.png)
 
 从这里可以看出，解包过程中会申请两个chunk
 第一个chunk的大小由ProtobufCMessageDescriptor的sizeof_message成员决定，本题固定为0x48，申请后chunk大小为0x50，符合分析结果
@@ -1283,7 +1281,7 @@ p.interactive()
 第二张图片显示的堆块变化是menu函数申请的0x30大小的堆块，用来存放content，并将unsortedbin的bk指针一起copy了
 可以得知输入8字节数据后可以泄露出一个unsortedbin的bk指针，调试获取偏移即可计算libc基址
 
-![](ciscn2024-ezbuf-leak-2.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-leak-2.png)
 
 得到偏移 2206944(0x21ace0)
 
@@ -1294,10 +1292,10 @@ p.interactive()
 4. 利用double free构造fastbin循环链表
 5. 将所有0x40大小的tcache全部申请出来
 6. 调试获取循环链表中第一个链表的地址与heap_base的差值(为了生成PROTECT_PTR保护后的地址)
-![](ciscn2024-ezbuf-leak-3.png)
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-leak-3.png)
 7. 利用PROTECT_PTR公式，填充相应的地址`p64((heap_base + 0xf0)^((heap_base + 0x004e40)>>12))`
-![](ciscn2024-ezbuf-alloc.png)
-8. 在heap_base + 0xf0处(即0xf8大小的tcache块的entries指针处，详细计算过程见[tcache_perthread_struct](#tcache_perthread_struct))，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct
+![](/img/post/ciscn2024/ciscn2024-初赛-wp/ciscn2024-ezbuf-alloc.png)
+8. 在heap_base + 0xf0处(即0xf8大小的tcache块的entries指针处，详细计算过程见[tcache_perthread_struct](/img/post/ciscn2024/ciscn2024-初赛-wp/#tcache_perthread_struct))，填上heap_base+0x10地址，之后申请0xe0大小的堆块后就会在heap_base+0x10处取堆块，由于tcache指向的是用户内存，所以它实际上申请到了tcache_perthread_struct
 9. 之后便可以更改`tcache_perthread_struct`了，可以实现tcache的任意分配，分配到`stdout`更改`write_ptr`和`write_end`指针泄露`environ`，调试`environ`与栈的偏移计算出栈地址，然后在利用`tcache_perthread_struct`分配到栈上进行ret2libc
 
 ### tcache_perthread_struct

@@ -1,8 +1,6 @@
 ---
 title: ciscn2024 华中地区半决赛 wp
 date: 2024-06-26 23:51:25
-category: wp
-tags:
 ---
 
 # pwn
