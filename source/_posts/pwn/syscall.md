@@ -1,26 +1,51 @@
 ---
 title: syscall
 date: 2024-05-12 20:03:05
-category: pwn
-tags: syscall 
 ---
 
+# int 80h与syscall
+`syscall`和`int 80h`是中断指令,Linux通过对这两个指令的封装为开发者们提供的一种用户态切换至内核态的方法,也就是系统调用
+
+## int 0x80 传统方法
+### 概述
+“int 0x80”是一种传统的中断指令，用于向处理器发出 0x80 号中断，从而将控制权传递给内核。这种方法自早期 x86 处理器时代以来一直被广泛用于调用系统调用。
+
+### 优点
+广泛支持： “int 0x80”在较旧的 Linux 内核和处理器上得到广泛支持。
+简便性： 使用“int 0x80”调用系统调用相对简单，只需要几行汇编代码。
+
+### 缺点
+不推荐使用： 对于 64 位 x86 架构，不推荐使用“int 0x80”。
+性能较差： 与“syscall”相比，“int 0x80”的性能较差，因为它需要额外的中断处理开销。
+
+## syscall 现代方法
+### 概述
+“syscall”是一种从 Linux 内核 2.4 开始引入的现代系统调用机制。它使用特殊寄存器和指令（例如，eax、rax）来调用系统调用，无需中断。
+
+### 优点
+高性能： “syscall”比“int 0x80”提供了更高的性能，因为它消除了中断处理开销。
+更安全： “syscall”更安全，因为它防止了由于中断处理中的错误而导致内核崩溃。
+跨架构支持： “syscall”跨不同的 x86 架构（包括 32 位和 64 位）提供一致的接口。
+
+### 缺点
+依赖性： “syscall”需要较新的 Linux 内核和处理器才能正常工作。
+复杂性： 使用“syscall”调用系统调用比使用“int 0x80”稍显复杂，需要了解特殊的寄存器和指令。
+
+## 推荐选择
+对于 32 位 Linux 代码，在大多数情况下，“syscall”是调用系统调用的首选方法。它提供了更高的性能、安全性以及跨架构支持。但是，如果你使用的是较旧的 Linux 内核或处理器，你可能需要使用“int 0x80”作为后备选项。
+对于 64 位 Linux 代码，只能使用“syscall”，因为“int 0x80”不受支持。
+
 # 调用约定
-## 32位
-32位linux以`int 80h`作为系统调用指令
+## int 80h
 以`eax`传递系统调用号
 参数传递顺序为`ebx`,`ecx`,`edx`,`esi`,`edi`
 
-## 64位
-64位linux以`syscall`作为系统调用指令
+## syscall
 以`rax`传递系统调用号
 参数传递顺序为`rdi`,`rsi`,`rdx`,`r10`,`r8`,`r9`
 
 # 系统调用号
-* 32位来自：https://blog.csdn.net/qq_41202237/article/details/107249667
-* 64位来自：https://blog.csdn.net/qq_41202237/article/details/107250349
-
-## linux 32位系统调用号
+## int 80h系统调用号
 | 系统调用               | 调用号 | 系统调用               | 调用号              |
 | ---------------------- | ------ | ---------------------- | ------------------- |
 | exit                   | 1      | fork                   | 2                   |
@@ -198,7 +223,7 @@ tags: syscall
 | sendmmsg               | 345    | set_ns                 | 346                 |
 | process_vm_readv       | 347    | process_vm_writev      | 348                 |
 
-## linux 64位系统调用号
+## syscall系统调用号
 | 系统调用               | 调用号 | 系统调用               | 调用号 |
 | ---------------------- | ------ | ---------------------- | ------ |
 | read                   | 0      | write                  | 1      |
@@ -359,9 +384,6 @@ tags: syscall
 | process_vm_readv       | 310    | process_vm_writev      | 311    |
 
 # 系统调用详解
-* 64位来自：https://hackeradam.com/x86-64-linux-syscalls/
-
-## 64位
 <table>
   <thead>
     <tr>
@@ -5082,3 +5104,11 @@ tags: syscall
     </tr>
   </tbody>
 </table>
+
+# 参考资料
+[linux syscall和int 80的区别](https://blog.csdn.net/bjbz_cxy/article/details/140602272)
+[32 位 Linux 代码中“int 0x80”与“syscall”：系统调用方法解析](https://www.bytezonex.com/archives/kCMSUXpw.html)
+[Linux32位系统调用号——奇偶排列表格方便查找](https://blog.csdn.net/qq_41202237/article/details/107249667)
+[Linux64位系统调用号——奇偶排列表格方便查找](https://blog.csdn.net/qq_41202237/article/details/107250349)
+[x86_64 LInux Syscall Reference | Adam Hacks](https://hackeradam.com/x86-64-linux-syscalls/)
+
